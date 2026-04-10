@@ -289,13 +289,20 @@ export function AbrirChamadoClient() {
       showToast({ title: "E-mail invalido.", variant: "error" });
       return;
     }
+    if (!message.trim()) {
+      showToast({
+        title: "Preencha a mensagem com o relato do problema.",
+        variant: "error",
+      });
+      return;
+    }
     setSubmitting(true);
     try {
       const api = getApiBase();
       const body: Record<string, unknown> = {
         publicCode: code,
         title: title.trim(),
-        clientMessage: message.trim() || null,
+        clientMessage: message.trim(),
         requesterName: requesterName.trim(),
         requesterEmail: requesterEmail.trim(),
         requesterPhone: requesterPhone.trim() || null,
@@ -463,12 +470,13 @@ export function AbrirChamadoClient() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium uppercase text-muted">
-              Mensagem (opcional)
+              Mensagem
             </label>
             <textarea
               className="min-h-[120px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              required
               maxLength={4000}
               placeholder="Detalhes, horario, equipamento..."
             />

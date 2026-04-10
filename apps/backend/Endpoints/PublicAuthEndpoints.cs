@@ -51,6 +51,8 @@ public static class PublicAuthEndpoints
             return Results.BadRequest(new { error = "Codigo publico obrigatorio." });
         if (string.IsNullOrWhiteSpace(body.Title))
             return Results.BadRequest(new { error = "Titulo obrigatorio." });
+        if (string.IsNullOrWhiteSpace(body.ClientMessage))
+            return Results.BadRequest(new { error = "Mensagem com o relato do problema e obrigatoria." });
 
         var name = body.RequesterName?.Trim() ?? "";
         var email = body.RequesterEmail?.Trim() ?? "";
@@ -73,7 +75,7 @@ public static class PublicAuthEndpoints
                 deviceId = dev.Id;
         }
 
-        var clientMsg = string.IsNullOrWhiteSpace(body.ClientMessage) ? null : body.ClientMessage.Trim();
+        var clientMsg = body.ClientMessage!.Trim();
         var phone = string.IsNullOrWhiteSpace(body.RequesterPhone) ? null : body.RequesterPhone.Trim();
         var dept = string.IsNullOrWhiteSpace(body.RequesterDepartment) ? null : body.RequesterDepartment.Trim();
         var now = DateTimeOffset.UtcNow;
