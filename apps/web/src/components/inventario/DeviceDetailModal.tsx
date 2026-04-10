@@ -23,6 +23,7 @@ type DeviceDetail = {
   totalDiskGb: number | null;
   antivirusSummary: string | null;
   cpuSummary: string | null;
+  gpuSummary: string | null;
   lastOsBootAt: string | null;
   notes: string | null;
   agentKey: string;
@@ -39,12 +40,15 @@ type Props = {
 export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [detail, setDetail] = useState<DeviceDetail | null>(null);
   const [clientName, setClientName] = useState("");
   const [hostname, setHostname] = useState("");
   const [username, setUsername] = useState("");
   const [notes, setNotes] = useState("");
   const [clientId, setClientId] = useState<string>("");
+
+  const clientLinkedByAgent = Boolean(detail?.clientId);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,9 +89,11 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
         username: username.trim(),
         notes: notes.trim() || null,
       };
-      const cid = clientId.trim();
-      if (cid) body.clientId = cid;
-      else body.clearClientId = true;
+      if (!clientLinkedByAgent) {
+        const cid = clientId.trim();
+        if (cid) body.clientId = cid;
+        else body.clearClientId = true;
+      }
 
       const res = await apiFetch(`/api/v1/devices/${deviceId}`, {
         method: "PATCH",
@@ -111,6 +117,38 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
       setSaving(false);
     }
   }
+
+  async function onDelete() {
+    if (
+      !window.confirm(
+        "Excluir este dispositivo do inventario? Chamados antigos mantem-se, mas deixam de referir esta maquina.",
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/v1/devices/${deviceId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        showToast({
+          title: j?.error ?? "Nao foi possivel excluir.",
+          variant: "error",
+        });
+        return;
+      }
+      showToast({ title: "Dispositivo excluido.", variant: "success" });
+      onSaved();
+      onClose();
+    } catch {
+      showToast({ title: "Falha de rede.", variant: "error" });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const registeredClientLabel =
+    detail?.clientId &&
+    clients.find((c) => c.id === detail.clientId)?.name;
 
   return (
     <div
@@ -159,6 +197,10 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
                 {detail.cpuSummary ?? "—"}
               </p>
               <p>
+                <span className="font-medium text-foreground">GPU:</span>{" "}
+                {detail.gpuSummary ?? "—"}
+              </p>
+              <p>
                 <span className="font-medium text-foreground">SO:</span> {detail.operatingSystem}
               </p>
               <p>
@@ -178,18 +220,27 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
 
             <div>
               <label className="text-xs font-medium text-muted">Cliente (cadastro)</label>
-              <select
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-              >
-                <option value="">(sem cliente vinculado)</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              {clientLinkedByAgent ? (
+                <p className="mt-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-foreground">
+                  {registeredClientLabel ?? detail.clientName}
+                  <span className="mt-1 block text-xs text-muted">
+                    Vinculado pela KEY do agente; nao pode ser alterado aqui.
+                  </span>
+                </p>
+              ) : (
+                <select
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                >
+                  <option value="">(sem cliente vinculado)</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
@@ -232,21 +283,31 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
               <button
                 type="button"
-                onClick={onClose}
-                className="rounded-lg border border-border px-4 py-2 text-sm"
+                onClick={onDelete}
+                disabled={deleting || saving}
+                className="rounded-lg border border-danger/50 px-4 py-2 text-sm text-danger hover:bg-danger/10 disabled:opacity-50"
               >
-                Cancelar
+                {deleting ? "Excluindo..." : "Excluir maquina"}
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {saving ? "Salvando..." : "Salvar"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg border border-border px-4 py-2 text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || deleting}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {saving ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
             </div>
           </form>
         )}

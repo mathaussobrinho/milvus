@@ -15,6 +15,8 @@ public class Device
     public string? AntivirusSummary { get; set; }
     /// <summary>Nome do processador (WMI).</summary>
     public string? CpuSummary { get; set; }
+    /// <summary>Placa(s) de video (WMI Win32_VideoController).</summary>
+    public string? GpuSummary { get; set; }
     /// <summary>Ultimo arranque do SO reportado pelo agente (WMI).</summary>
     public DateTimeOffset? LastOsBootAt { get; set; }
     /// <summary>Notas internas editadas no painel.</summary>

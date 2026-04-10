@@ -39,6 +39,7 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
             entity.Property(d => d.TotalDiskGb).HasColumnName("total_disk_gb");
             entity.Property(d => d.AntivirusSummary).HasColumnName("antivirus_summary").HasMaxLength(200);
             entity.Property(d => d.CpuSummary).HasColumnName("cpu_summary").HasMaxLength(300);
+            entity.Property(d => d.GpuSummary).HasColumnName("gpu_summary").HasMaxLength(500);
             entity.Property(d => d.LastOsBootAt).HasColumnName("last_os_boot_at");
             entity.Property(d => d.Notes).HasColumnName("notes").HasMaxLength(2000);
             entity.HasIndex(d => d.AgentKey).IsUnique();

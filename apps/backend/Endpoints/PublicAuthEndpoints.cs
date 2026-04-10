@@ -144,6 +144,7 @@ public static class PublicAuthEndpoints
                     ? null
                     : body.AntivirusSummary.Trim(),
                 CpuSummary = string.IsNullOrWhiteSpace(body.CpuSummary) ? null : body.CpuSummary.Trim(),
+                GpuSummary = string.IsNullOrWhiteSpace(body.GpuSummary) ? null : body.GpuSummary.Trim(),
                 LastOsBootAt = body.LastOsBootAt
             };
             db.Devices.Add(device);
@@ -177,6 +178,8 @@ public static class PublicAuthEndpoints
                 device.AntivirusSummary = body.AntivirusSummary.Trim();
             if (!string.IsNullOrWhiteSpace(body.CpuSummary))
                 device.CpuSummary = body.CpuSummary.Trim();
+            if (!string.IsNullOrWhiteSpace(body.GpuSummary))
+                device.GpuSummary = body.GpuSummary.Trim();
             if (body.LastOsBootAt.HasValue)
                 device.LastOsBootAt = body.LastOsBootAt;
         }

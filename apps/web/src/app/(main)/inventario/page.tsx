@@ -23,6 +23,7 @@ export default async function InventarioPage() {
         totalDiskGb: number | null;
         antivirusSummary: string | null;
         cpuSummary: string | null;
+        gpuSummary: string | null;
         lastOsBootAt: string | null;
       }[]
     >("/api/v1/devices"),

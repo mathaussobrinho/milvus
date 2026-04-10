@@ -50,6 +50,7 @@ public record DeviceListItemDto(
     int? TotalDiskGb,
     string? AntivirusSummary,
     string? CpuSummary,
+    string? GpuSummary,
     DateTimeOffset? LastOsBootAt);
 
 public record DeviceDetailDto(
@@ -69,6 +70,7 @@ public record DeviceDetailDto(
     int? TotalDiskGb,
     string? AntivirusSummary,
     string? CpuSummary,
+    string? GpuSummary,
     DateTimeOffset? LastOsBootAt,
     string? Notes,
     string AgentKey,
@@ -95,6 +97,7 @@ public record AgentSyncRequest(
     int? TotalDiskGb,
     string? AntivirusSummary,
     string? CpuSummary,
+    string? GpuSummary,
     DateTimeOffset? LastOsBootAt);
 
 public record PublicClientByCodeDto(Guid Id, string Name, string PublicCode);

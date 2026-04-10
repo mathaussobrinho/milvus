@@ -345,6 +345,7 @@ public static class V1Endpoints
                     d.TotalDiskGb,
                     d.AntivirusSummary,
                     d.CpuSummary,
+                    d.GpuSummary,
                     d.LastOsBootAt);
             }).OrderBy(d => d.ClientName).ThenBy(d => d.Hostname).ToList();
 
@@ -384,10 +385,23 @@ public static class V1Endpoints
                 d.TotalDiskGb,
                 d.AntivirusSummary,
                 d.CpuSummary,
+                d.GpuSummary,
                 d.LastOsBootAt,
                 d.Notes,
                 d.AgentKey,
                 d.CreatedAt));
+        });
+
+        v1.MapDelete("/devices/{id:guid}", async (Guid id, VisoHelpDbContext db) =>
+        {
+            var device = await db.Devices.FirstOrDefaultAsync(x => x.Id == id);
+            if (device is null)
+                return Results.NotFound();
+
+            await db.DeviceAlerts.Where(a => a.DeviceId == id).ExecuteDeleteAsync();
+            db.Devices.Remove(device);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
         });
 
         v1.MapPatch("/devices/{id:guid}", async (Guid id, PatchDeviceRequest body, VisoHelpDbContext db) =>
@@ -396,14 +410,27 @@ public static class V1Endpoints
             if (device is null)
                 return Results.NotFound();
 
-            if (body.ClearClientId == true)
-                device.ClientId = null;
-            else if (body.ClientId.HasValue)
+            var clientLocked = device.ClientId.HasValue;
+            if (clientLocked)
             {
-                var ok = await db.Clients.AnyAsync(c => c.Id == body.ClientId.Value);
-                if (!ok)
-                    return Results.BadRequest(new { error = "Cliente invalido." });
-                device.ClientId = body.ClientId;
+                if (body.ClearClientId == true || body.ClientId.HasValue)
+                    return Results.BadRequest(new
+                    {
+                        error =
+                            "Cliente cadastrado vinculado pelo agente (KEY) nao pode ser alterado aqui.",
+                    });
+            }
+            else
+            {
+                if (body.ClearClientId == true)
+                    device.ClientId = null;
+                else if (body.ClientId.HasValue)
+                {
+                    var ok = await db.Clients.AnyAsync(c => c.Id == body.ClientId.Value);
+                    if (!ok)
+                        return Results.BadRequest(new { error = "Cliente invalido." });
+                    device.ClientId = body.ClientId;
+                }
             }
 
             if (body.ClientName != null)

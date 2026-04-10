@@ -25,6 +25,7 @@ export type DeviceRow = {
   totalDiskGb: number | null;
   antivirusSummary: string | null;
   cpuSummary: string | null;
+  gpuSummary: string | null;
   lastOsBootAt: string | null;
 };
 
@@ -75,6 +76,7 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
           d.operatingSystem,
           d.antivirusSummary ?? "",
           d.cpuSummary ?? "",
+          d.gpuSummary ?? "",
         ]
           .join(" ")
           .toLowerCase();
@@ -158,6 +160,7 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Dispositivo</th>
                 <th className="px-4 py-3 font-medium">Processador</th>
+                <th className="px-4 py-3 font-medium">GPU</th>
                 <th className="px-4 py-3 font-medium">Ultimo boot SO</th>
                 <th className="px-4 py-3 font-medium">Alertas</th>
                 <th className="px-4 py-3 font-medium">Tickets</th>
@@ -208,6 +211,9 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                   </td>
                   <td className="max-w-[200px] px-4 py-3 text-xs text-muted">
                     {d.cpuSummary ?? "—"}
+                  </td>
+                  <td className="max-w-[200px] px-4 py-3 text-xs text-muted">
+                    {d.gpuSummary ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">
                     {d.lastOsBootAt

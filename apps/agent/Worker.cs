@@ -83,6 +83,7 @@ public class Worker : BackgroundService
         var diskGb = HardwareInfo.TryGetSystemDiskGb();
         var av = HardwareInfo.TryGetAntivirusSummary();
         var cpu = HardwareInfo.TryGetCpuName();
+        var gpu = HardwareInfo.TryGetGpuSummary();
         var lastBoot = HardwareInfo.TryGetLastOsBootUtc();
 
         try
@@ -110,6 +111,8 @@ public class Worker : BackgroundService
             body["antivirusSummary"] = av;
             if (!string.IsNullOrWhiteSpace(cpu))
                 body["cpuSummary"] = cpu;
+            if (!string.IsNullOrWhiteSpace(gpu))
+                body["gpuSummary"] = gpu;
             if (lastBoot.HasValue)
                 body["lastOsBootAt"] = lastBoot.Value;
 

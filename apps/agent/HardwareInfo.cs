@@ -1,4 +1,5 @@
 using System.Management;
+using Microsoft.Win32;
 
 namespace VisoHelp.Agent;
 
@@ -81,11 +82,18 @@ internal static class HardwareInfo
         try
         {
             using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Processor");
-            foreach (var o in searcher.Get())
+            foreach (ManagementObject o in searcher.Get())
             {
-                var name = o["Name"]?.ToString()?.Trim();
-                if (!string.IsNullOrEmpty(name))
-                    return name;
+                try
+                {
+                    var name = o["Name"]?.ToString()?.Trim();
+                    if (!string.IsNullOrEmpty(name))
+                        return name;
+                }
+                finally
+                {
+                    o.Dispose();
+                }
             }
         }
         catch
@@ -93,7 +101,55 @@ internal static class HardwareInfo
             /* ignore */
         }
 
-        return null;
+        return TryGetCpuNameFromRegistry();
+    }
+
+    /// <summary>Fallback quando WMI nao devolve processador (ex.: alguns ambientes).</summary>
+    public static string? TryGetCpuNameFromRegistry()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(
+                @"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+            var v = key?.GetValue("ProcessorNameString") as string;
+            return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Nomes das placas de video (Win32_VideoController).</summary>
+    public static string? TryGetGpuSummary()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ManagementObject o in searcher.Get())
+            {
+                try
+                {
+                    var name = o["Name"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+                    if (name.Contains("Microsoft Basic Render Driver", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    names.Add(name);
+                }
+                finally
+                {
+                    o.Dispose();
+                }
+            }
+
+            return names.Count > 0 ? string.Join(" · ", names) : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Ultimo boot do SO (UTC aproximado conforme WMI).</summary>
