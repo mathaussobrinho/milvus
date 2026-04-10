@@ -1,11 +1,18 @@
 import { Suspense } from "react";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { AbrirChamadoClient } from "./AbrirChamadoClient";
 
 export default function AbrirChamadoPage() {
   return (
     <div className="min-h-full bg-background">
-      <header className="border-b border-border bg-surface px-4 py-4">
-        <p className="text-center text-sm font-semibold text-primary">VisoHelp</p>
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-4">
+        <span className="w-24 shrink-0" aria-hidden />
+        <p className="flex-1 text-center text-sm font-semibold text-primary">
+          VisoHelp
+        </p>
+        <div className="w-24 shrink-0 flex justify-end">
+          <ThemeToggle />
+        </div>
       </header>
       <Suspense
         fallback={

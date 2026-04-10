@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
   --background: #eef1f8;
@@ -10,6 +12,18 @@
   --danger: #c8102e;
   --black: #2a3140;
   --border: #cdd5e4;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0d1118;
+  --surface: #161c28;
+  --foreground: #e9ecf2;
+  --muted: #94a0b5;
+  --primary: #4d7cff;
+  --danger: #f2556d;
+  --black: #c8d0e0;
+  --border: #2a3448;
 }
 
 @theme inline {
@@ -39,6 +53,19 @@ body {
     );
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.dark body {
+  background-image: radial-gradient(
+      ellipse 120% 80% at 100% 0%,
+      rgba(77, 124, 255, 0.12),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 80% 50% at 0% 100%,
+      rgba(242, 85, 109, 0.06),
+      transparent 50%
+    );
 }
 
 * {

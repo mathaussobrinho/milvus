@@ -125,48 +125,46 @@ export function AppSidebar() {
                 })}
               </div>
             ) : null}
+
+            <button
+              type="button"
+              onClick={() => setConfigOpen((o) => !o)}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+                configActive
+                  ? "bg-primary/10 text-foreground"
+                  : "text-foreground/80 hover:bg-background"
+              }`}
+              aria-expanded={configOpen}
+            >
+              <span>Configuracoes</span>
+              <span className="text-xs text-muted" aria-hidden>
+                {configOpen ? "▾" : "▸"}
+              </span>
+            </button>
+            {configOpen ? (
+              <div className="ml-2 flex flex-col gap-0.5 border-l border-primary/35 pl-2">
+                {configSub.map((item) => {
+                  const active =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                        active
+                          ? "bg-primary text-white"
+                          : "text-muted hover:bg-background hover:text-foreground"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </nav>
-
-        <div className="shrink-0 p-3 pt-1">
-          <button
-            type="button"
-            onClick={() => setConfigOpen((o) => !o)}
-            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-              configActive
-                ? "bg-primary/10 text-foreground"
-                : "text-foreground/80 hover:bg-background"
-            }`}
-            aria-expanded={configOpen}
-          >
-            <span>Configuracoes</span>
-            <span className="text-xs text-muted" aria-hidden>
-              {configOpen ? "▾" : "▸"}
-            </span>
-          </button>
-          {configOpen ? (
-            <div className="mt-1 ml-2 flex flex-col gap-0.5 border-l border-primary/35 pl-2">
-              {configSub.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-                      active
-                        ? "bg-primary text-white"
-                        : "text-muted hover:bg-background hover:text-foreground"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
       </div>
 
       <div className="relative shrink-0 border-t border-border bg-background/40 p-3 pl-4">
