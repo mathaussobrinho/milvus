@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { InventarioFiltersStrip } from "@/components/inventario/InventarioFiltersStrip";
 import { DeviceDetailModal } from "@/components/inventario/DeviceDetailModal";
+import { formatHardwareSummaryLine } from "@/components/inventario/hardwareSummary";
 
 const uuidRe =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -159,13 +160,13 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Dispositivo</th>
-                <th className="px-4 py-3 font-medium">Processador</th>
-                <th className="px-4 py-3 font-medium">GPU</th>
                 <th className="px-4 py-3 font-medium">Ultimo boot SO</th>
                 <th className="px-4 py-3 font-medium">Alertas</th>
                 <th className="px-4 py-3 font-medium">Tickets</th>
                 <th className="px-4 py-3 font-medium">Ultima sync</th>
-                <th className="px-4 py-3 font-medium">RAM / Disco / AV</th>
+                <th className="min-w-[280px] max-w-md px-4 py-3 font-medium">
+                  RAM · Disco · CPU · GPU · AV
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -209,12 +210,6 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                       {d.username} · {d.operatingSystem}
                     </p>
                   </td>
-                  <td className="max-w-[200px] px-4 py-3 text-xs text-muted">
-                    {d.cpuSummary ?? "—"}
-                  </td>
-                  <td className="max-w-[200px] px-4 py-3 text-xs text-muted">
-                    {d.gpuSummary ?? "—"}
-                  </td>
                   <td className="px-4 py-3 text-xs text-muted">
                     {d.lastOsBootAt
                       ? new Date(d.lastOsBootAt).toLocaleString("pt-BR")
@@ -231,12 +226,11 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                   <td className="px-4 py-3 text-muted">
                     {new Date(d.lastSeenAt).toLocaleString("pt-BR")}
                   </td>
-                  <td className="max-w-[220px] px-4 py-3 text-xs text-muted">
-                    {d.totalRamMb != null ? `${Math.round(d.totalRamMb / 1024)} GB RAM` : "—"}
-                    {" · "}
-                    {d.totalDiskGb != null ? `${d.totalDiskGb} GB` : "—"}
-                    {" · "}
-                    {d.antivirusSummary ?? "—"}
+                  <td
+                    className="max-w-md px-4 py-3 text-xs text-muted"
+                    title={formatHardwareSummaryLine(d)}
+                  >
+                    {formatHardwareSummaryLine(d)}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatHardwareSummaryLine } from "@/components/inventario/hardwareSummary";
 import { apiFetch } from "@/lib/client-api";
 import { showToast } from "@/lib/toast";
 
@@ -45,7 +46,6 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
   const [clientName, setClientName] = useState("");
   const [hostname, setHostname] = useState("");
   const [username, setUsername] = useState("");
-  const [notes, setNotes] = useState("");
   const [clientId, setClientId] = useState<string>("");
 
   const clientLinkedByAgent = Boolean(detail?.clientId);
@@ -66,7 +66,6 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
         setClientName(d.clientName);
         setHostname(d.hostname);
         setUsername(d.username);
-        setNotes(d.notes ?? "");
         setClientId(d.clientId ?? "");
       } catch {
         if (!cancelled) setDetail(null);
@@ -87,7 +86,6 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
         clientName: clientName.trim(),
         hostname: hostname.trim(),
         username: username.trim(),
-        notes: notes.trim() || null,
       };
       if (!clientLinkedByAgent) {
         const cid = clientId.trim();
@@ -193,25 +191,17 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
                   : "—"}
               </p>
               <p>
-                <span className="font-medium text-foreground">Processador:</span>{" "}
-                {detail.cpuSummary ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium text-foreground">GPU:</span>{" "}
-                {detail.gpuSummary ?? "—"}
-              </p>
-              <p>
                 <span className="font-medium text-foreground">SO:</span> {detail.operatingSystem}
               </p>
               <p>
                 <span className="font-medium text-foreground">IP / MAC:</span> {detail.ipAddress}{" "}
                 / {detail.macAddress || "—"}
               </p>
-              <p>
-                <span className="font-medium text-foreground">RAM / Disco / AV:</span>{" "}
-                {detail.totalRamMb != null ? `${Math.round(detail.totalRamMb / 1024)} GB` : "—"} ·{" "}
-                {detail.totalDiskGb != null ? `${detail.totalDiskGb} GB` : "—"} ·{" "}
-                {detail.antivirusSummary ?? "—"}
+              <p className="break-words">
+                <span className="font-medium text-foreground">
+                  RAM · Disco · CPU · GPU · AV:
+                </span>{" "}
+                {formatHardwareSummaryLine(detail)}
               </p>
               <p className="break-all">
                 <span className="font-medium text-foreground">Agent key:</span> {detail.agentKey}
@@ -270,16 +260,6 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 maxLength={120}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-muted">Notas internas</label>
-              <textarea
-                className="mt-1 min-h-[80px] w-full rounded-lg border border-border bg-background px-3 py-2"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                maxLength={2000}
               />
             </div>
 

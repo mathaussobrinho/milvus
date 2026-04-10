@@ -3,17 +3,68 @@ using Microsoft.Win32;
 
 namespace VisoHelp.Agent;
 
+/// <summary>
+/// Inventario via WMI. O Worker corre em threadpool (MTA); WMI/COM costuma exigir STA,
+/// por isso a recolha completa corre numa unica thread STA (evita CPU/GPU vazios).
+/// </summary>
 internal static class HardwareInfo
 {
-    public static long? TryGetTotalRamMb()
+    internal readonly record struct SyncSnapshot(
+        long? TotalRamMb,
+        int? TotalDiskGb,
+        string AntivirusSummary,
+        string? CpuSummary,
+        string? GpuSummary,
+        DateTimeOffset? LastOsBootAt);
+
+    /// <summary>Recolhe RAM, disco, AV, CPU, GPU e boot numa thread STA.</summary>
+    public static SyncSnapshot CollectForSync()
+    {
+        SyncSnapshot? result = null;
+        var t = new Thread(() =>
+        {
+            try
+            {
+                var ram = QueryTotalRamMb();
+                var disk = QuerySystemDiskGb();
+                var av = QueryAntivirusSummary();
+                var cpu = QueryCpuFromWmi();
+                if (string.IsNullOrWhiteSpace(cpu))
+                    cpu = QueryCpuFromRegistry();
+                var gpu = QueryGpuSummary();
+                var boot = QueryLastOsBootUtc();
+                result = new SyncSnapshot(ram, disk, av, cpu, gpu, boot);
+            }
+            catch
+            {
+                /* ignore */
+            }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.IsBackground = true;
+        t.Start();
+        if (!t.Join(TimeSpan.FromSeconds(45)))
+            return new SyncSnapshot(null, null, "Indisponivel", null, null, null);
+
+        return result ?? new SyncSnapshot(null, null, "Indisponivel", null, null, null);
+    }
+
+    private static long? QueryTotalRamMb()
     {
         try
         {
             using var searcher = new ManagementObjectSearcher("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem");
-            foreach (var o in searcher.Get())
+            foreach (ManagementObject o in searcher.Get())
             {
-                if (o["TotalPhysicalMemory"] is ulong bytes)
-                    return (long)(bytes / (1024UL * 1024UL));
+                try
+                {
+                    if (o["TotalPhysicalMemory"] is ulong bytes)
+                        return (long)(bytes / (1024UL * 1024UL));
+                }
+                finally
+                {
+                    o.Dispose();
+                }
             }
         }
         catch
@@ -24,7 +75,7 @@ internal static class HardwareInfo
         return null;
     }
 
-    public static int? TryGetSystemDiskGb()
+    private static int? QuerySystemDiskGb()
     {
         try
         {
@@ -35,10 +86,17 @@ internal static class HardwareInfo
                 letter = "C:";
             using var searcher = new ManagementObjectSearcher(
                 $"SELECT Size FROM Win32_LogicalDisk WHERE DeviceID='{letter.Replace("'", "''")}'");
-            foreach (var o in searcher.Get())
+            foreach (ManagementObject o in searcher.Get())
             {
-                if (o["Size"] is ulong size)
-                    return (int)(size / (1024UL * 1024UL * 1024UL));
+                try
+                {
+                    if (o["Size"] is ulong size)
+                        return (int)(size / (1024UL * 1024UL * 1024UL));
+                }
+                finally
+                {
+                    o.Dispose();
+                }
             }
         }
         catch
@@ -49,7 +107,7 @@ internal static class HardwareInfo
         return null;
     }
 
-    public static string TryGetAntivirusSummary()
+    private static string QueryAntivirusSummary()
     {
         try
         {
@@ -77,7 +135,7 @@ internal static class HardwareInfo
         }
     }
 
-    public static string? TryGetCpuName()
+    private static string? QueryCpuFromWmi()
     {
         try
         {
@@ -101,11 +159,10 @@ internal static class HardwareInfo
             /* ignore */
         }
 
-        return TryGetCpuNameFromRegistry();
+        return null;
     }
 
-    /// <summary>Fallback quando WMI nao devolve processador (ex.: alguns ambientes).</summary>
-    public static string? TryGetCpuNameFromRegistry()
+    private static string? QueryCpuFromRegistry()
     {
         try
         {
@@ -120,18 +177,19 @@ internal static class HardwareInfo
         }
     }
 
-    /// <summary>Nomes das placas de video (Win32_VideoController).</summary>
-    public static string? TryGetGpuSummary()
+    private static string? QueryGpuSummary()
     {
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
+            using var searcher = new ManagementObjectSearcher("SELECT Name, VideoProcessor FROM Win32_VideoController");
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (ManagementObject o in searcher.Get())
             {
                 try
                 {
                     var name = o["Name"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(name))
+                        name = o["VideoProcessor"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(name))
                         continue;
                     if (name.Contains("Microsoft Basic Render Driver", StringComparison.OrdinalIgnoreCase))
@@ -152,8 +210,7 @@ internal static class HardwareInfo
         }
     }
 
-    /// <summary>Ultimo boot do SO (UTC aproximado conforme WMI).</summary>
-    public static DateTimeOffset? TryGetLastOsBootUtc()
+    private static DateTimeOffset? QueryLastOsBootUtc()
     {
         try
         {

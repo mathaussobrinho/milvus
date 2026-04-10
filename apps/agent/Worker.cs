@@ -79,12 +79,13 @@ public class Worker : BackgroundService
         if (string.IsNullOrEmpty(clientName))
             clientName = Environment.MachineName;
 
-        var ramMb = HardwareInfo.TryGetTotalRamMb();
-        var diskGb = HardwareInfo.TryGetSystemDiskGb();
-        var av = HardwareInfo.TryGetAntivirusSummary();
-        var cpu = HardwareInfo.TryGetCpuName();
-        var gpu = HardwareInfo.TryGetGpuSummary();
-        var lastBoot = HardwareInfo.TryGetLastOsBootUtc();
+        var snap = HardwareInfo.CollectForSync();
+        var ramMb = snap.TotalRamMb;
+        var diskGb = snap.TotalDiskGb;
+        var av = snap.AntivirusSummary;
+        var cpu = snap.CpuSummary;
+        var gpu = snap.GpuSummary;
+        var lastBoot = snap.LastOsBootAt;
 
         try
         {
