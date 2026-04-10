@@ -112,6 +112,37 @@ public record PublicCreateTicketRequest(
     string? RequesterDepartment,
     string? AgentKey);
 
+/// <summary>Lista de chamados do solicitante (portal publico; valida KEY + e-mail).</summary>
+public record PublicMyTicketItemDto(
+    Guid Id,
+    string Title,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public record PublicTicketCommentForClientDto(
+    Guid Id,
+    string Body,
+    bool IsFromClient,
+    string AuthorName,
+    DateTimeOffset CreatedAt);
+
+public record PublicTicketDetailForClientDto(
+    Guid Id,
+    string Title,
+    string? ClientProvidedDescription,
+    string Status,
+    string Priority,
+    string? RequesterName,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<PublicTicketCommentForClientDto> Comments);
+
+public record PublicTicketCommentCreateRequest(
+    string PublicCode,
+    string RequesterEmail,
+    string Body);
+
 public record ClientListItemDto(
     Guid Id,
     string Name,

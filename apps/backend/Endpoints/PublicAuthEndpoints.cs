@@ -18,11 +18,17 @@ public static class PublicAuthEndpoints
         pub.MapPost("/auth/reset-password", ResetPasswordAsync);
         pub.MapGet("/public/client-by-code", ClientByCodeAsync);
         pub.MapPost("/public/tickets", PublicCreateTicketAsync);
+        pub.MapGet("/public/my-tickets", PublicMyTicketsAsync);
+        pub.MapGet("/public/tickets/{id:guid}", PublicTicketDetailForClientAsync);
+        pub.MapPost("/public/tickets/{id:guid}/comments", PublicTicketCommentFromClientAsync);
         pub.MapPost("/agent/sync", AgentSyncAsync);
     }
 
     private static string NormalizePublicCode(string? code) =>
         string.IsNullOrWhiteSpace(code) ? "" : code.Trim().ToUpperInvariant();
+
+    private static string NormalizeEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? "" : email.Trim().ToLowerInvariant();
 
     private static async Task<IResult> ClientByCodeAsync(string? code, VisoHelpDbContext db)
     {
@@ -92,6 +98,136 @@ public static class PublicAuthEndpoints
         db.Tickets.Add(ticket);
         await db.SaveChangesAsync();
         return Results.Created($"/api/v1/tickets/{ticket.Id}", new { ticket.Id });
+    }
+
+    /// <summary>Chamados abertos pelo e-mail do solicitante para esta KEY.</summary>
+    private static async Task<IResult> PublicMyTicketsAsync(
+        string? code,
+        string? email,
+        VisoHelpDbContext db)
+    {
+        var normalized = NormalizePublicCode(code);
+        var emailNorm = NormalizeEmail(email);
+        if (normalized.Length == 0)
+            return Results.BadRequest(new { error = "Codigo obrigatorio." });
+        if (emailNorm.Length == 0 || !emailNorm.Contains('@', StringComparison.Ordinal))
+            return Results.BadRequest(new { error = "E-mail obrigatorio." });
+
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == "default" && c.PublicCode == normalized);
+        if (client is null)
+            return Results.BadRequest(new { error = "Codigo invalido." });
+
+        var list = await db.Tickets.AsNoTracking()
+            .Where(t =>
+                t.ClientId == client.Id &&
+                t.RequesterEmail != null &&
+                t.RequesterEmail.ToLower() == emailNorm)
+            .OrderByDescending(t => t.UpdatedAt)
+            .Select(t => new PublicMyTicketItemDto(t.Id, t.Title, t.Status, t.CreatedAt, t.UpdatedAt))
+            .ToListAsync();
+
+        return Results.Ok(list);
+    }
+
+    private static async Task<IResult> PublicTicketDetailForClientAsync(
+        Guid id,
+        string? code,
+        string? email,
+        VisoHelpDbContext db)
+    {
+        var normalized = NormalizePublicCode(code);
+        var emailNorm = NormalizeEmail(email);
+        if (normalized.Length == 0)
+            return Results.BadRequest(new { error = "Codigo obrigatorio." });
+        if (emailNorm.Length == 0 || !emailNorm.Contains('@', StringComparison.Ordinal))
+            return Results.BadRequest(new { error = "E-mail obrigatorio." });
+
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == "default" && c.PublicCode == normalized);
+        if (client is null)
+            return Results.BadRequest(new { error = "Codigo invalido." });
+
+        var ticket = await db.Tickets.AsNoTracking()
+            .FirstOrDefaultAsync(t =>
+                t.Id == id &&
+                t.ClientId == client.Id &&
+                t.RequesterEmail != null &&
+                t.RequesterEmail.ToLower() == emailNorm);
+        if (ticket is null)
+            return Results.NotFound();
+
+        var comments = await db.TicketComments.AsNoTracking()
+            .Where(c => c.TicketId == id && !c.IsInternalOnly)
+            .OrderBy(c => c.CreatedAt)
+            .Select(c => new PublicTicketCommentForClientDto(
+                c.Id,
+                c.Body,
+                c.IsFromClient,
+                c.AuthorName,
+                c.CreatedAt))
+            .ToListAsync();
+
+        return Results.Ok(new PublicTicketDetailForClientDto(
+            ticket.Id,
+            ticket.Title,
+            ticket.ClientProvidedDescription,
+            ticket.Status,
+            ticket.Priority,
+            ticket.RequesterName,
+            ticket.CreatedAt,
+            ticket.UpdatedAt,
+            comments));
+    }
+
+    private static async Task<IResult> PublicTicketCommentFromClientAsync(
+        Guid id,
+        PublicTicketCommentCreateRequest body,
+        VisoHelpDbContext db)
+    {
+        var normalized = NormalizePublicCode(body.PublicCode);
+        var emailNorm = NormalizeEmail(body.RequesterEmail);
+        if (normalized.Length == 0)
+            return Results.BadRequest(new { error = "Codigo publico obrigatorio." });
+        if (emailNorm.Length == 0 || !emailNorm.Contains('@', StringComparison.Ordinal))
+            return Results.BadRequest(new { error = "E-mail obrigatorio." });
+        var text = body.Body?.Trim() ?? "";
+        if (text.Length == 0)
+            return Results.BadRequest(new { error = "Mensagem obrigatoria." });
+
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == "default" && c.PublicCode == normalized);
+        if (client is null)
+            return Results.BadRequest(new { error = "Codigo invalido." });
+
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t =>
+            t.Id == id &&
+            t.ClientId == client.Id &&
+            t.RequesterEmail != null &&
+            t.RequesterEmail.ToLower() == emailNorm);
+        if (ticket is null)
+            return Results.NotFound();
+
+        var now = DateTimeOffset.UtcNow;
+        var author = string.IsNullOrWhiteSpace(ticket.RequesterName)
+            ? "Cliente"
+            : ticket.RequesterName.Trim();
+        var comment = new TicketComment
+        {
+            TenantId = "default",
+            TicketId = id,
+            Body = text,
+            IsInternalOnly = false,
+            AuthorAnalystId = null,
+            AuthorName = author,
+            IsFromClient = true,
+            CreatedAt = now
+        };
+        db.TicketComments.Add(comment);
+        ticket.UpdatedAt = now;
+        await db.SaveChangesAsync();
+
+        return Results.Created($"/api/v1/public/tickets/{id}", new { comment.Id });
     }
 
     private static async Task<IResult> AgentSyncAsync(AgentSyncRequest body, VisoHelpDbContext db)
