@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatHardwareSummaryLine } from "@/components/inventario/hardwareSummary";
+import {
+  formatAntivirusSummary,
+  formatHardwareSummaryLine,
+} from "@/components/inventario/hardwareSummary";
 import { apiFetch } from "@/lib/client-api";
 import { showToast } from "@/lib/toast";
 
@@ -199,9 +202,13 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
               </p>
               <p className="break-words">
                 <span className="font-medium text-foreground">
-                  RAM · Disco · CPU · GPU · AV:
+                  RAM · Disco · CPU · GPU:
                 </span>{" "}
                 {formatHardwareSummaryLine(detail)}
+              </p>
+              <p className="break-words">
+                <span className="font-medium text-foreground">Antivirus:</span>{" "}
+                {formatAntivirusSummary(detail)}
               </p>
               <p className="break-all">
                 <span className="font-medium text-foreground">Agent key:</span> {detail.agentKey}

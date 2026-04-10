@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { InventarioFiltersStrip } from "@/components/inventario/InventarioFiltersStrip";
 import { DeviceDetailModal } from "@/components/inventario/DeviceDetailModal";
-import { formatHardwareSummaryLine } from "@/components/inventario/hardwareSummary";
+import {
+  formatAntivirusSummary,
+  formatHardwareSummaryLine,
+} from "@/components/inventario/hardwareSummary";
 
 const uuidRe =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -164,8 +167,11 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                 <th className="px-4 py-3 font-medium">Alertas</th>
                 <th className="px-4 py-3 font-medium">Tickets</th>
                 <th className="px-4 py-3 font-medium">Ultima sync</th>
-                <th className="min-w-[280px] max-w-md px-4 py-3 font-medium">
-                  RAM · Disco · CPU · GPU · AV
+                <th className="min-w-[220px] max-w-md px-4 py-3 font-medium">
+                  RAM · Disco · CPU · GPU
+                </th>
+                <th className="min-w-[140px] max-w-xs px-4 py-3 font-medium">
+                  Antivirus
                 </th>
               </tr>
             </thead>
@@ -231,6 +237,12 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                     title={formatHardwareSummaryLine(d)}
                   >
                     {formatHardwareSummaryLine(d)}
+                  </td>
+                  <td
+                    className="max-w-xs px-4 py-3 text-xs text-muted"
+                    title={formatAntivirusSummary(d)}
+                  >
+                    {formatAntivirusSummary(d)}
                   </td>
                 </tr>
               ))}
