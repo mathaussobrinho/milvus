@@ -13,11 +13,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { apiFetch } from "@/lib/client-api";
+import { showToast } from "@/lib/toast";
 import { TicketCard } from "./TicketCard";
 import {
   KANBAN_COLUMNS,
   apiStatusFromDropColumn,
   columnForStatus,
+  isTerminalStatus,
   type TicketRow,
 } from "./ticketLabels";
 
@@ -151,6 +153,14 @@ export function TicketsKanban({
 
     const targetCol = resolveDropColumn(over?.id, tickets);
     if (!targetCol) return;
+
+    if (isTerminalStatus(ticket.status) && targetCol !== "done") {
+      showToast({
+        title: "Chamado encerrado nao pode ser reaberto.",
+        variant: "error",
+      });
+      return;
+    }
 
     const nextStatus = apiStatusFromDropColumn(targetCol, ticket.status);
     if (!nextStatus || nextStatus === ticket.status) return;

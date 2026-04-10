@@ -178,6 +178,12 @@ public static class V1Endpoints
             if (ticket is null)
                 return Results.NotFound();
 
+            if (TicketStatuses.IsTerminal(ticket.Status))
+                return Results.BadRequest(new
+                {
+                    error = "Chamado encerrado; nao e possivel adicionar comentarios."
+                });
+
             var now = DateTimeOffset.UtcNow;
             var comment = new TicketComment
             {
@@ -252,7 +258,14 @@ public static class V1Endpoints
                 var s = body.Status.Trim().ToLowerInvariant();
                 var allowed = new[] { "open", "in_progress", "waiting", "resolved", "closed" };
                 if (allowed.Contains(s))
+                {
+                    if (TicketStatuses.IsTerminal(ticket.Status) && !TicketStatuses.IsTerminal(s))
+                        return Results.BadRequest(new
+                        {
+                            error = "Chamado encerrado nao pode ser reaberto."
+                        });
                     ticket.Status = s;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(body.Title))

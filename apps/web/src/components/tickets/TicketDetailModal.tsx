@@ -1,5 +1,6 @@
 "use client";
 
+import { isTerminalStatus } from "@/components/tickets/ticketLabels";
 import { apiFetch } from "@/lib/client-api";
 import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
@@ -140,6 +141,13 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
   async function submitComment(e: React.FormEvent) {
     e.preventDefault();
     if (!ticketId || !commentBody.trim()) return;
+    if (detail && isTerminalStatus(detail.status)) {
+      showToast({
+        title: "Chamado encerrado; nao e possivel comentar.",
+        variant: "error",
+      });
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await apiFetch(`/api/v1/tickets/${ticketId}/comments`, {
@@ -324,10 +332,20 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
                       className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                       value={editStatus}
                       onChange={(e) => setEditStatus(e.target.value)}
+                      aria-label="Status do chamado"
                     >
-                      <option value="open">Aberto</option>
-                      <option value="in_progress">Em andamento</option>
-                      <option value="waiting">Aguardando</option>
+                      <option value="open" disabled={!!detail && isTerminalStatus(detail.status)}>
+                        Aberto
+                      </option>
+                      <option
+                        value="in_progress"
+                        disabled={!!detail && isTerminalStatus(detail.status)}
+                      >
+                        Em andamento
+                      </option>
+                      <option value="waiting" disabled={!!detail && isTerminalStatus(detail.status)}>
+                        Aguardando
+                      </option>
                       <option value="resolved">Resolvido</option>
                       <option value="closed">Fechado</option>
                     </select>
@@ -476,57 +494,63 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
                 )}
               </ul>
 
-              <form className="space-y-3 border-t border-border pt-4" onSubmit={submitComment}>
-                <h3 className="text-sm font-medium text-foreground">Novo comentario</h3>
-                <textarea
-                  required
-                  rows={4}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted"
-                  placeholder="Escreva o comentario..."
-                  value={commentBody}
-                  onChange={(e) => setCommentBody(e.target.value)}
-                />
-                <fieldset className="space-y-2 text-sm text-foreground/80">
-                  <legend className="text-xs text-muted">Quem pode ver?</legend>
-                  <label className="flex cursor-pointer items-start gap-2">
-                    <input
-                      type="radio"
-                      name="vis"
-                      checked={!internalOnly}
-                      onChange={() => setInternalOnly(false)}
-                      className="mt-1"
-                    />
-                    <span>
-                      <span className="font-medium text-foreground">Cliente e analistas</span>
-                      <span className="block text-xs text-muted">
-                        Visivel para a empresa (cliente) e para a equipe interna.
+              {detail && isTerminalStatus(detail.status) ? (
+                <p className="mt-4 border-t border-border pt-4 text-sm text-muted">
+                  Chamado encerrado: nao e possivel adicionar comentarios nem reabrir o status.
+                </p>
+              ) : (
+                <form className="space-y-3 border-t border-border pt-4" onSubmit={submitComment}>
+                  <h3 className="text-sm font-medium text-foreground">Novo comentario</h3>
+                  <textarea
+                    required
+                    rows={4}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted"
+                    placeholder="Escreva o comentario..."
+                    value={commentBody}
+                    onChange={(e) => setCommentBody(e.target.value)}
+                  />
+                  <fieldset className="space-y-2 text-sm text-foreground/80">
+                    <legend className="text-xs text-muted">Quem pode ver?</legend>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="radio"
+                        name="vis"
+                        checked={!internalOnly}
+                        onChange={() => setInternalOnly(false)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Cliente e analistas</span>
+                        <span className="block text-xs text-muted">
+                          Visivel para a empresa (cliente) e para a equipe interna.
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-2">
-                    <input
-                      type="radio"
-                      name="vis"
-                      checked={internalOnly}
-                      onChange={() => setInternalOnly(true)}
-                      className="mt-1"
-                    />
-                    <span>
-                      <span className="font-medium text-foreground">Somente analistas</span>
-                      <span className="block text-xs text-muted">
-                        Nota interna; o cliente nao ve este comentario.
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="radio"
+                        name="vis"
+                        checked={internalOnly}
+                        onChange={() => setInternalOnly(true)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Somente analistas</span>
+                        <span className="block text-xs text-muted">
+                          Nota interna; o cliente nao ve este comentario.
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                </fieldset>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50"
-                >
-                  {submitting ? "Enviando..." : "Publicar comentario"}
-                </button>
-              </form>
+                    </label>
+                  </fieldset>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50"
+                  >
+                    {submitting ? "Enviando..." : "Publicar comentario"}
+                  </button>
+                </form>
+              )}
             </div>
           )}
         </div>

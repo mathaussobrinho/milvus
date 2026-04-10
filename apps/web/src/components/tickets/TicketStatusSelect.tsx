@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/client-api";
+import { showToast } from "@/lib/toast";
+import { isTerminalStatus } from "./ticketLabels";
 
 const options = [
   { value: "open", label: "Aberto" },
@@ -25,13 +27,28 @@ export function TicketStatusSelect({
   const [pending, setPending] = useState(false);
 
   async function onChange(next: string) {
+    if (isTerminalStatus(current) && !isTerminalStatus(next)) {
+      showToast({
+        title: "Chamado encerrado nao pode ser reaberto.",
+        variant: "error",
+      });
+      return;
+    }
     setPending(true);
     try {
-      await apiFetch(`/api/v1/tickets/${ticketId}`, {
+      const res = await apiFetch(`/api/v1/tickets/${ticketId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
       });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        showToast({
+          title: j?.error ?? "Nao foi possivel alterar o status.",
+          variant: "error",
+        });
+        return;
+      }
       router.refresh();
     } finally {
       setPending(false);
@@ -48,7 +65,11 @@ export function TicketStatusSelect({
       aria-label={`Status do ticket ${label}`}
     >
       {options.map((o) => (
-        <option key={o.value} value={o.value}>
+        <option
+          key={o.value}
+          value={o.value}
+          disabled={isTerminalStatus(current) && !isTerminalStatus(o.value)}
+        >
           {o.label}
         </option>
       ))}

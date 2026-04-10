@@ -112,7 +112,7 @@ public record PublicCreateTicketRequest(
     string? RequesterDepartment,
     string? AgentKey);
 
-/// <summary>Lista de chamados do solicitante (portal publico; valida KEY + e-mail).</summary>
+/// <summary>Lista de chamados do portal publico (KEY + agentKey → dispositivo).</summary>
 public record PublicMyTicketItemDto(
     Guid Id,
     string Title,
@@ -138,10 +138,12 @@ public record PublicTicketDetailForClientDto(
     DateTimeOffset UpdatedAt,
     IReadOnlyList<PublicTicketCommentForClientDto> Comments);
 
+/// <summary>Comentario publico: use <see cref="AgentKey"/> (atalho do agente) ou <see cref="RequesterEmail"/> (legado).</summary>
 public record PublicTicketCommentCreateRequest(
     string PublicCode,
-    string RequesterEmail,
-    string Body);
+    string Body,
+    string? AgentKey,
+    string? RequesterEmail);
 
 public record ClientListItemDto(
     Guid Id,

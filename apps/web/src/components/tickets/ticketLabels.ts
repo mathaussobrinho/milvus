@@ -59,3 +59,9 @@ export function columnForStatus(status: string): string {
   if (status === "waiting") return "waiting";
   return "open";
 }
+
+/** Chamado encerrado: nao reabre nem aceita comentarios do cliente. */
+export function isTerminalStatus(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return s === "resolved" || s === "closed";
+}

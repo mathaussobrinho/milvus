@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { isTerminalStatus } from "@/components/tickets/ticketLabels";
 import { getApiBase } from "@/lib/api-base";
 import { showToast } from "@/lib/toast";
 
@@ -35,10 +36,6 @@ type PublicTicketDetail = {
   comments: PublicTicketComment[];
 };
 
-function storageEmailKey(publicCode: string) {
-  return `visohelp_public_email_${publicCode.trim().toUpperCase()}`;
-}
-
 export function AbrirChamadoClient() {
   const searchParams = useSearchParams();
   const keyFromUrl = searchParams.get("key")?.trim() ?? "";
@@ -60,7 +57,6 @@ export function AbrirChamadoClient() {
   const [requesterDepartment, setRequesterDepartment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const [trackerEmail, setTrackerEmail] = useState("");
   const [myTickets, setMyTickets] = useState<PublicMyTicketItem[] | null>(null);
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -114,22 +110,15 @@ export function AbrirChamadoClient() {
     if (tabFromUrl === "novo") setTab("novo");
   }, [tabFromUrl]);
 
-  useEffect(() => {
-    const code = publicCode.trim().toUpperCase();
-    if (code.length < 3) return;
-    try {
-      const saved = sessionStorage.getItem(storageEmailKey(code));
-      if (saved) setTrackerEmail(saved);
-    } catch {
-      /* ignore */
-    }
-  }, [publicCode]);
+  const agentKey = agentKeyFromUrl.trim();
 
   const fetchMyTickets = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
-    const email = trackerEmail.trim();
-    if (!code || !email || !email.includes("@")) {
-      showToast({ title: "Informe um e-mail valido.", variant: "error" });
+    if (!code || !agentKey) {
+      showToast({
+        title: "Codigo do agente ausente. Abra pelo atalho VisoHelp.",
+        variant: "error",
+      });
       return;
     }
     setMyTicketsLoading(true);
@@ -137,7 +126,7 @@ export function AbrirChamadoClient() {
     try {
       const api = getApiBase();
       const res = await fetch(
-        `${api}/api/v1/public/my-tickets?code=${encodeURIComponent(code)}&email=${encodeURIComponent(email)}`,
+        `${api}/api/v1/public/my-tickets?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(agentKey)}`,
         { method: "GET", cache: "no-store" }
       );
       const json = await res.json().catch(() => ({}));
@@ -150,29 +139,23 @@ export function AbrirChamadoClient() {
         return;
       }
       setMyTickets(json as PublicMyTicketItem[]);
-      try {
-        sessionStorage.setItem(storageEmailKey(code), email);
-      } catch {
-        /* ignore */
-      }
     } catch {
       showToast({ title: "Falha de rede. Tente novamente.", variant: "error" });
     } finally {
       setMyTicketsLoading(false);
     }
-  }, [publicCode, trackerEmail]);
+  }, [publicCode, agentKey]);
 
   const fetchDetail = useCallback(
     async (ticketId: string) => {
       const code = publicCode.trim().toUpperCase();
-      const email = trackerEmail.trim();
-      if (!code || !email) return;
+      if (!code || !agentKey) return;
       setDetailLoading(true);
       setDetail(null);
       try {
         const api = getApiBase();
         const res = await fetch(
-          `${api}/api/v1/public/tickets/${ticketId}?code=${encodeURIComponent(code)}&email=${encodeURIComponent(email)}`,
+          `${api}/api/v1/public/tickets/${ticketId}?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(agentKey)}`,
           { method: "GET", cache: "no-store" }
         );
         if (res.status === 404) {
@@ -196,7 +179,7 @@ export function AbrirChamadoClient() {
         setDetailLoading(false);
       }
     },
-    [publicCode, trackerEmail]
+    [publicCode, agentKey]
   );
 
   useEffect(() => {
@@ -208,14 +191,18 @@ export function AbrirChamadoClient() {
     void fetchDetail(selectedTicketId);
   }, [selectedTicketId, fetchDetail]);
 
+  useEffect(() => {
+    if (tab !== "meus" || !agentKey || !clientInfo || selectedTicketId) return;
+    void fetchMyTickets();
+  }, [tab, agentKey, clientInfo, selectedTicketId, fetchMyTickets]);
+
   const refreshMyTicketsSilent = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
-    const email = trackerEmail.trim();
-    if (!code || !email || !email.includes("@")) return;
+    if (!code || !agentKey) return;
     try {
       const api = getApiBase();
       const res = await fetch(
-        `${api}/api/v1/public/my-tickets?code=${encodeURIComponent(code)}&email=${encodeURIComponent(email)}`,
+        `${api}/api/v1/public/my-tickets?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(agentKey)}`,
         { method: "GET", cache: "no-store" }
       );
       if (!res.ok) return;
@@ -224,18 +211,25 @@ export function AbrirChamadoClient() {
     } catch {
       /* ignore */
     }
-  }, [publicCode, trackerEmail]);
+  }, [publicCode, agentKey]);
 
   async function sendReply(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedTicketId || !detail) return;
+    if (isTerminalStatus(detail.status)) return;
     const text = replyBody.trim();
     if (!text) {
       showToast({ title: "Escreva uma mensagem.", variant: "error" });
       return;
     }
     const code = publicCode.trim().toUpperCase();
-    const email = trackerEmail.trim();
+    if (!agentKey) {
+      showToast({
+        title: "Codigo do agente ausente. Abra pelo atalho VisoHelp.",
+        variant: "error",
+      });
+      return;
+    }
     setReplySending(true);
     try {
       const api = getApiBase();
@@ -246,8 +240,9 @@ export function AbrirChamadoClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             publicCode: code,
-            requesterEmail: email,
             body: text,
+            agentKey,
+            requesterEmail: null,
           }),
         }
       );
@@ -320,12 +315,6 @@ export function AbrirChamadoClient() {
       showToast({ title: "Chamado registrado com sucesso.", variant: "success" });
       setTitle("");
       setMessage("");
-      try {
-        sessionStorage.setItem(storageEmailKey(code), requesterEmail.trim());
-      } catch {
-        /* ignore */
-      }
-      setTrackerEmail(requesterEmail.trim());
     } catch {
       showToast({ title: "Falha de rede. Tente novamente.", variant: "error" });
     } finally {
@@ -497,33 +486,21 @@ export function AbrirChamadoClient() {
               <p className="font-medium text-primary">{clientInfo.name}</p>
             </div>
           )}
+          {!agentKey && (
+            <p className="text-sm text-muted">
+              Para listar os chamados abertos neste computador, abra esta pagina pelo
+              atalho <strong>VisoHelp Abrir chamado</strong> no ambiente de trabalho (a
+              URL inclui o codigo do agente).
+            </p>
+          )}
+          {agentKey && (
+            <p className="text-sm text-muted">
+              Chamados abertos por este equipamento (qualquer solicitante), vinculados
+              ao agente instalado.
+            </p>
+          )}
           {!selectedTicketId && (
             <>
-              <p className="text-sm text-muted">
-                Use o mesmo e-mail informado ao abrir chamados para listar e
-                acompanhar.
-              </p>
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase text-muted">
-                  E-mail
-                </label>
-                <input
-                  type="email"
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-                  value={trackerEmail}
-                  onChange={(e) => setTrackerEmail(e.target.value)}
-                  maxLength={200}
-                  autoComplete="email"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void fetchMyTickets()}
-                disabled={myTicketsLoading || !clientInfo}
-                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {myTicketsLoading ? "Carregando..." : "Ver meus chamados"}
-              </button>
               {loadingClient && (
                 <p className="text-xs text-muted">Verificando cliente...</p>
               )}
@@ -532,9 +509,21 @@ export function AbrirChamadoClient() {
                   Codigo do cliente invalido ou API indisponivel.
                 </p>
               )}
-              {myTickets && myTickets.length === 0 && (
+              {agentKey && clientInfo && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => void fetchMyTickets()}
+                    disabled={myTicketsLoading}
+                    className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {myTicketsLoading ? "Atualizando..." : "Atualizar lista"}
+                  </button>
+                </div>
+              )}
+              {myTickets && myTickets.length === 0 && !myTicketsLoading && (
                 <p className="text-sm text-muted">
-                  Nenhum chamado encontrado para este e-mail.
+                  Nenhum chamado desta maquina ainda.
                 </p>
               )}
               {myTickets && myTickets.length > 0 && (
@@ -565,13 +554,23 @@ export function AbrirChamadoClient() {
 
           {selectedTicketId && (
             <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => setSelectedTicketId(null)}
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                Voltar para a lista
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTicketId(null)}
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Voltar para a lista
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void fetchDetail(selectedTicketId)}
+                  disabled={detailLoading}
+                  className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {detailLoading ? "Atualizando..." : "Atualizar"}
+                </button>
+              </div>
               {detailLoading && (
                 <p className="text-sm text-muted">Carregando chamado...</p>
               )}
@@ -618,25 +617,32 @@ export function AbrirChamadoClient() {
                       ))}
                     </ul>
                   </div>
-                  <form onSubmit={sendReply} className="space-y-2">
-                    <label className="block text-xs font-medium uppercase text-muted">
-                      Sua resposta
-                    </label>
-                    <textarea
-                      className="min-h-[100px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-                      value={replyBody}
-                      onChange={(e) => setReplyBody(e.target.value)}
-                      maxLength={4000}
-                      placeholder="Escreva uma mensagem para o suporte..."
-                    />
-                    <button
-                      type="submit"
-                      disabled={replySending}
-                      className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {replySending ? "Enviando..." : "Enviar mensagem"}
-                    </button>
-                  </form>
+                  {isTerminalStatus(detail.status) ? (
+                    <p className="rounded-lg border border-border bg-muted/20 px-3 py-3 text-sm text-muted">
+                      Este chamado esta encerrado (resolvido ou fechado) e nao aceita mais
+                      mensagens nem pode ser reaberto por aqui.
+                    </p>
+                  ) : (
+                    <form onSubmit={sendReply} className="space-y-2">
+                      <label className="block text-xs font-medium uppercase text-muted">
+                        Sua resposta
+                      </label>
+                      <textarea
+                        className="min-h-[100px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                        value={replyBody}
+                        onChange={(e) => setReplyBody(e.target.value)}
+                        maxLength={4000}
+                        placeholder="Escreva uma mensagem para o suporte..."
+                      />
+                      <button
+                        type="submit"
+                        disabled={replySending}
+                        className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {replySending ? "Enviando..." : "Enviar mensagem"}
+                      </button>
+                    </form>
+                  )}
                 </>
               )}
             </div>
