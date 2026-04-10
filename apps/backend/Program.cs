@@ -24,20 +24,30 @@ builder.Services.AddCors(options =>
     options.AddPolicy("local-dev", policy =>
     {
         var configured = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
-        var origins = configured is { Length: > 0 }
-            ? configured
-            : new[]
-            {
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:8081"
-            };
+        var origins = (configured is { Length: > 0 }
+                ? configured
+                : new[]
+                {
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:8081",
+                    "https://app.dizparo.com.br"
+                })
+            .Select(static o => o.Trim())
+            .Where(static o => o.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (origins.Length == 0)
+            origins = new[] { "https://app.dizparo.com.br" };
+
         policy
             .WithOrigins(origins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .SetPreflightMaxAge(TimeSpan.FromHours(1));
     });
 });
 
@@ -75,6 +85,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// CORS deve ficar depois de UseRouting e antes de Auth (preflight OPTIONS com DELETE + Authorization).
+app.UseRouting();
 app.UseCors("local-dev");
 if (!app.Environment.IsDevelopment())
 {
