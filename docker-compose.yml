@@ -1,0 +1,46 @@
+# VisoHelp — API + Web na mesma rede Docker do Postgres existente.
+# Copie .env.example para .env e ajuste EXTERNAL_DOCKER_NETWORK e POSTGRES_CONNECTION_STRING.
+#
+# Na VPS, descubra a rede do container Postgres:
+#   docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' <container_postgres>
+#
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: ${POSTGRES_CONNECTION_STRING}
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER:-VisoHelp}
+      Jwt__Audience: ${JWT_AUDIENCE:-VisoHelp.Web}
+      Cors__AllowedOrigins__0: ${PUBLIC_APP_ORIGIN:-https://app.dizparo.com.br}
+      # Primeiro utilizador (analista master). Obrigatório para conseguir entrar após deploy limpo.
+      MasterAnalyst__Email: ${MASTER_ANALYST_EMAIL:-}
+      MasterAnalyst__Password: ${MASTER_ANALYST_PASSWORD:-}
+      MasterAnalyst__DisplayName: ${MASTER_ANALYST_DISPLAY_NAME:-}
+      MasterAnalyst__DefaultTeamName: ${MASTER_ANALYST_DEFAULT_TEAM_NAME:-Administradores}
+      # true uma vez para aplicar MASTER_ANALYST_PASSWORD a um master já existente; depois volte a false.
+      MasterAnalyst__ForcePasswordReset: ${MASTER_ANALYST_FORCE_PASSWORD_RESET:-false}
+    ports:
+      - "${API_HOST_PORT:-5212}:8080"
+    networks:
+      - visohelp
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dizparo.com.br}
+    ports:
+      - "${WEB_HOST_PORT:-3000}:3000"
+    networks:
+      - visohelp
+
+networks:
+  visohelp:
+    external: true
+    name: ${EXTERNAL_DOCKER_NETWORK}

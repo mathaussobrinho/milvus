@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getApiBase } from "@/lib/api-base";
+import { showToast } from "@/lib/toast";
 
 export function RedefinirSenhaForm() {
   const router = useRouter();
@@ -35,12 +36,24 @@ export function RedefinirSenhaForm() {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(j?.error ?? "Nao foi possivel redefinir. Verifique e-mail e token.");
+        const message = j?.error ?? "Nao foi possivel redefinir. Verifique e-mail e token.";
+        setError(message);
+        showToast({ title: "Erro ao salvar nova senha", description: message, variant: "error" });
         return;
       }
+      showToast({
+        title: "Senha redefinida",
+        description: "Nova senha salva com sucesso.",
+        variant: "success",
+      });
       router.push("/login");
     } catch {
       setError("Falha de rede.");
+      showToast({
+        title: "Erro ao salvar nova senha",
+        description: "Falha de rede.",
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }

@@ -1,0 +1,31 @@
+VisoHelp Agente — instalacao (um unico .exe)
+
+O arquivo VisoHelp.Agent.exe inclui o runtime .NET: NAO e necessario instalar o .NET no Windows do cliente.
+
+1) Copie VisoHelp.Agent.exe para a maquina (ou use o ZIP e extraia).
+   O ZIP inclui appsettings.json e appsettings.Production.json: mantenha os dois
+   na mesma pasta do .exe para as URLs de producao (API/site HTTPS) serem aplicadas.
+
+2) Execute VisoHelp.Agent.exe. Na primeira vez abre um assistente:
+   - informe apenas a KEY publica do cliente (cadastro em Clientes).
+   As URLs da API e do site ja vêm configuradas no aplicativo (ambiente producao).
+   A KEY e validada na API antes de concluir.
+
+3) Se voce executou a partir de Downloads ou outra pasta, o programa copia-se para:
+   %LocalAppData%\VisoHelp\
+   e registra inicio automatico + atalho "VisoHelp Abrir chamado" na area de trabalho.
+
+4) Apos isso o icone fica na bandeja do sistema.
+
+5) Para remover o agente (instalacao padrao em %LocalAppData%\VisoHelp\):
+   - use o ficheiro Desinstalar-VisoHelp-Agent.cmd (mesma pasta do ZIP ou
+     download em Configuracoes > Agente no painel), ou
+   - execute-o com duplo clique: encerra o programa, remove o arranque
+     automatico, o atalho "VisoHelp Abrir chamado" na area de trabalho e a
+     pasta VisoHelp em AppData\Local.
+   Instalacoes noutro diretorio (ex.: Inno Setup personalizado) podem exigir
+   remocao manual.
+
+Para gerar o .exe a partir do codigo-fonte (na sua maquina de desenvolvimento):
+  powershell -File installer\publish-release.ps1
+A saida fica na pasta "release\" na raiz do projeto.

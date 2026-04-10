@@ -8,6 +8,8 @@ public record TicketListItemDto(
     string Priority,
     Guid? ClientId,
     string? ClientName,
+    Guid? AssigneeAnalystId,
+    string? AssigneeName,
     Guid? DeviceId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -27,10 +29,13 @@ public record PatchTicketRequest(
     bool? UpdateDescription,
     string? Priority,
     Guid? ClientId,
-    Guid? DeviceId);
+    Guid? DeviceId,
+    Guid? AssigneeAnalystId,
+    bool? UpdateAssignee);
 
 public record DeviceListItemDto(
     Guid Id,
+    Guid? ClientId,
     string ClientName,
     string Hostname,
     string IpAddress,
@@ -40,7 +45,42 @@ public record DeviceListItemDto(
     bool IsOnline,
     int OpenAlertCount,
     int OpenTicketCount,
-    DateTimeOffset LastSeenAt);
+    DateTimeOffset LastSeenAt,
+    long? TotalRamMb,
+    int? TotalDiskGb,
+    string? AntivirusSummary,
+    string? CpuSummary,
+    DateTimeOffset? LastOsBootAt);
+
+public record DeviceDetailDto(
+    Guid Id,
+    Guid? ClientId,
+    string ClientName,
+    string Hostname,
+    string IpAddress,
+    string MacAddress,
+    string Username,
+    string OperatingSystem,
+    bool IsOnline,
+    int OpenAlertCount,
+    int OpenTicketCount,
+    DateTimeOffset LastSeenAt,
+    long? TotalRamMb,
+    int? TotalDiskGb,
+    string? AntivirusSummary,
+    string? CpuSummary,
+    DateTimeOffset? LastOsBootAt,
+    string? Notes,
+    string AgentKey,
+    DateTimeOffset CreatedAt);
+
+public record PatchDeviceRequest(
+    string? ClientName,
+    string? Hostname,
+    string? Username,
+    string? Notes,
+    Guid? ClientId,
+    bool? ClearClientId);
 
 public record AgentSyncRequest(
     string AgentKey,
@@ -49,7 +89,25 @@ public record AgentSyncRequest(
     string OperatingSystem,
     string IpAddress,
     string? MacAddress,
-    string? ClientName);
+    string? ClientName,
+    string? ClientPublicCode,
+    long? TotalRamMb,
+    int? TotalDiskGb,
+    string? AntivirusSummary,
+    string? CpuSummary,
+    DateTimeOffset? LastOsBootAt);
+
+public record PublicClientByCodeDto(Guid Id, string Name, string PublicCode);
+
+public record PublicCreateTicketRequest(
+    string PublicCode,
+    string Title,
+    string? ClientMessage,
+    string? RequesterName,
+    string? RequesterEmail,
+    string? RequesterPhone,
+    string? RequesterDepartment,
+    string? AgentKey);
 
 public record ClientListItemDto(
     Guid Id,
@@ -68,11 +126,39 @@ public record ClientDetailDto(
     string? Phone,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<TicketListItemDto> Tickets);
+    IReadOnlyList<TicketListItemDto> Tickets,
+    IReadOnlyList<ClientEmployeeDto> Employees);
 
 public record CreateClientRequest(string Name, string? Email, string? Phone);
 
 public record PatchClientRequest(string? Name, string? Email, string? Phone);
+
+public record ClientEmployeeDto(
+    Guid Id,
+    string Name,
+    string? Department,
+    string? Role,
+    string? Email,
+    string? Phone,
+    bool IsPrimary,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public record CreateClientEmployeeRequest(
+    string Name,
+    string? Department,
+    string? Role,
+    string? Email,
+    string? Phone,
+    bool? IsPrimary);
+
+public record PatchClientEmployeeRequest(
+    string? Name,
+    string? Department,
+    string? Role,
+    string? Email,
+    string? Phone,
+    bool? IsPrimary);
 
 public record AnalystListItemDto(
     Guid Id,
@@ -137,6 +223,8 @@ public record TicketDetailDto(
     string Priority,
     Guid? ClientId,
     string? ClientName,
+    Guid? AssigneeAnalystId,
+    string? AssigneeName,
     Guid? DeviceId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,

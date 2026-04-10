@@ -16,7 +16,82 @@ public static class PublicAuthEndpoints
         pub.MapPost("/auth/login", LoginAsync);
         pub.MapPost("/auth/forgot-password", ForgotPasswordAsync);
         pub.MapPost("/auth/reset-password", ResetPasswordAsync);
+        pub.MapGet("/public/client-by-code", ClientByCodeAsync);
+        pub.MapPost("/public/tickets", PublicCreateTicketAsync);
         pub.MapPost("/agent/sync", AgentSyncAsync);
+    }
+
+    private static string NormalizePublicCode(string? code) =>
+        string.IsNullOrWhiteSpace(code) ? "" : code.Trim().ToUpperInvariant();
+
+    private static async Task<IResult> ClientByCodeAsync(string? code, VisoHelpDbContext db)
+    {
+        var normalized = NormalizePublicCode(code);
+        if (normalized.Length == 0)
+            return Results.BadRequest(new { error = "Codigo obrigatorio." });
+
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == "default" && c.PublicCode == normalized);
+        if (client is null)
+            return Results.NotFound();
+
+        return Results.Ok(new PublicClientByCodeDto(client.Id, client.Name, client.PublicCode ?? ""));
+    }
+
+    private static async Task<IResult> PublicCreateTicketAsync(PublicCreateTicketRequest body, VisoHelpDbContext db)
+    {
+        var normalized = NormalizePublicCode(body.PublicCode);
+        if (normalized.Length == 0)
+            return Results.BadRequest(new { error = "Codigo publico obrigatorio." });
+        if (string.IsNullOrWhiteSpace(body.Title))
+            return Results.BadRequest(new { error = "Titulo obrigatorio." });
+
+        var name = body.RequesterName?.Trim() ?? "";
+        var email = body.RequesterEmail?.Trim() ?? "";
+        if (name.Length == 0)
+            return Results.BadRequest(new { error = "Nome do solicitante obrigatorio." });
+        if (email.Length == 0 || !email.Contains('@', StringComparison.Ordinal))
+            return Results.BadRequest(new { error = "E-mail do solicitante invalido." });
+
+        var client = await db.Clients.FirstOrDefaultAsync(c =>
+            c.TenantId == "default" && c.PublicCode == normalized);
+        if (client is null)
+            return Results.BadRequest(new { error = "Codigo invalido." });
+
+        Guid? deviceId = null;
+        var agentKey = body.AgentKey?.Trim();
+        if (!string.IsNullOrEmpty(agentKey))
+        {
+            var dev = await db.Devices.FirstOrDefaultAsync(d => d.AgentKey == agentKey);
+            if (dev != null && dev.ClientId == client.Id)
+                deviceId = dev.Id;
+        }
+
+        var clientMsg = string.IsNullOrWhiteSpace(body.ClientMessage) ? null : body.ClientMessage.Trim();
+        var phone = string.IsNullOrWhiteSpace(body.RequesterPhone) ? null : body.RequesterPhone.Trim();
+        var dept = string.IsNullOrWhiteSpace(body.RequesterDepartment) ? null : body.RequesterDepartment.Trim();
+        var now = DateTimeOffset.UtcNow;
+        var ticket = new Ticket
+        {
+            TenantId = "default",
+            Title = body.Title.Trim(),
+            ClientProvidedDescription = clientMsg,
+            Description = null,
+            Priority = "medium",
+            Status = "open",
+            ClientId = client.Id,
+            DeviceId = deviceId,
+            RequesterName = name,
+            RequesterEmail = email,
+            RequesterPhone = phone,
+            RequesterDepartment = dept,
+            AssigneeAnalystId = null,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        db.Tickets.Add(ticket);
+        await db.SaveChangesAsync();
+        return Results.Created($"/api/v1/tickets/{ticket.Id}", new { ticket.Id });
     }
 
     private static async Task<IResult> AgentSyncAsync(AgentSyncRequest body, VisoHelpDbContext db)
@@ -30,7 +105,20 @@ public static class PublicAuthEndpoints
         var device = await db.Devices.FirstOrDefaultAsync(d => d.AgentKey == key);
         var now = DateTimeOffset.UtcNow;
         var mac = string.IsNullOrWhiteSpace(body.MacAddress) ? "" : body.MacAddress.Trim();
-        var client = string.IsNullOrWhiteSpace(body.ClientName) ? "Nao informado" : body.ClientName.Trim();
+
+        var codeNormalized = NormalizePublicCode(body.ClientPublicCode);
+        Client? linkedClient = null;
+        if (codeNormalized.Length > 0)
+        {
+            linkedClient = await db.Clients.FirstOrDefaultAsync(c =>
+                c.TenantId == "default" && c.PublicCode == codeNormalized);
+            if (linkedClient is null)
+                return Results.BadRequest(new { error = "Codigo publico do cliente invalido." });
+        }
+
+        var clientLabel = linkedClient != null
+            ? linkedClient.Name.Trim()
+            : (string.IsNullOrWhiteSpace(body.ClientName) ? "Nao informado" : body.ClientName.Trim());
 
         if (device is null)
         {
@@ -38,7 +126,8 @@ public static class PublicAuthEndpoints
             {
                 AgentKey = key,
                 TenantId = "default",
-                ClientName = client,
+                ClientId = linkedClient?.Id,
+                ClientName = clientLabel,
                 Hostname = body.Hostname.Trim(),
                 OperatingSystem = string.IsNullOrWhiteSpace(body.OperatingSystem)
                     ? "Desconhecido"
@@ -48,13 +137,29 @@ public static class PublicAuthEndpoints
                 MacAddress = mac,
                 IsOnline = true,
                 LastSeenAt = now,
-                CreatedAt = now
+                CreatedAt = now,
+                TotalRamMb = body.TotalRamMb,
+                TotalDiskGb = body.TotalDiskGb,
+                AntivirusSummary = string.IsNullOrWhiteSpace(body.AntivirusSummary)
+                    ? null
+                    : body.AntivirusSummary.Trim(),
+                CpuSummary = string.IsNullOrWhiteSpace(body.CpuSummary) ? null : body.CpuSummary.Trim(),
+                LastOsBootAt = body.LastOsBootAt
             };
             db.Devices.Add(device);
         }
         else
         {
-            device.ClientName = client;
+            if (linkedClient != null)
+            {
+                device.ClientId = linkedClient.Id;
+                device.ClientName = linkedClient.Name.Trim();
+            }
+            else
+            {
+                device.ClientName = clientLabel;
+            }
+
             device.Hostname = body.Hostname.Trim();
             device.OperatingSystem = string.IsNullOrWhiteSpace(body.OperatingSystem)
                 ? device.OperatingSystem
@@ -64,6 +169,16 @@ public static class PublicAuthEndpoints
             device.MacAddress = string.IsNullOrWhiteSpace(mac) ? device.MacAddress : mac;
             device.IsOnline = true;
             device.LastSeenAt = now;
+            if (body.TotalRamMb.HasValue)
+                device.TotalRamMb = body.TotalRamMb;
+            if (body.TotalDiskGb.HasValue)
+                device.TotalDiskGb = body.TotalDiskGb;
+            if (!string.IsNullOrWhiteSpace(body.AntivirusSummary))
+                device.AntivirusSummary = body.AntivirusSummary.Trim();
+            if (!string.IsNullOrWhiteSpace(body.CpuSummary))
+                device.CpuSummary = body.CpuSummary.Trim();
+            if (body.LastOsBootAt.HasValue)
+                device.LastOsBootAt = body.LastOsBootAt;
         }
 
         await db.SaveChangesAsync();

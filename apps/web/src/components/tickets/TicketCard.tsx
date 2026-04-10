@@ -49,6 +49,11 @@ function CardInner({ ticket }: { ticket: TicketRow }) {
       {ticket.clientName ? (
         <p className="mt-1 truncate text-[11px] text-muted">{ticket.clientName}</p>
       ) : null}
+      {ticket.assigneeName ? (
+        <p className="mt-0.5 truncate text-[10px] text-muted">
+          {ticket.assigneeName}
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap gap-1.5">
         <span
           className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${priorityClass(ticket.priority)}`}

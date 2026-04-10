@@ -8,6 +8,7 @@ coverage/
 # .NET
 bin/
 obj/
+release/
 
 # IDE and OS
 .DS_Store
@@ -19,3 +20,10 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Bundles de deploy local (nao versionar)
+visohelp-deploy.tar
+visohelp.tgz
+
+# Pacote do agente (gerar com installer/publish-release.ps1; ficheiro grande)
+apps/web/public/downloads/VisoHelp.Agent.zip

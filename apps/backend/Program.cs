@@ -23,13 +23,19 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("local-dev", policy =>
     {
-        policy
-            .WithOrigins(
+        var configured = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var origins = configured is { Length: > 0 }
+            ? configured
+            : new[]
+            {
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "http://localhost:8081")
+                "http://localhost:8081"
+            };
+        policy
+            .WithOrigins(origins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });

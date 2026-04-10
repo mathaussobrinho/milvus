@@ -11,7 +11,15 @@ public class Ticket
     public string? Description { get; set; }
     public Guid? ClientId { get; set; }
     public Client? Client { get; set; }
+    /// <summary>Analista responsavel pelo atendimento do chamado.</summary>
+    public Guid? AssigneeAnalystId { get; set; }
+    public Analyst? AssigneeAnalyst { get; set; }
     public Guid? DeviceId { get; set; }
+    /// <summary>Dados do solicitante em chamados publicos (abrir chamado).</summary>
+    public string? RequesterName { get; set; }
+    public string? RequesterEmail { get; set; }
+    public string? RequesterPhone { get; set; }
+    public string? RequesterDepartment { get; set; }
     public string Status { get; set; } = "open";
     public string Priority { get; set; } = "medium";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

@@ -6,7 +6,19 @@ public class Device
     public string TenantId { get; set; } = "default";
     /// <summary>Chave estavel do agente (upsert).</summary>
     public string AgentKey { get; set; } = string.Empty;
+    /// <summary>Cliente cadastrado quando o sync envia codigo publico.</summary>
+    public Guid? ClientId { get; set; }
+    public Client? Client { get; set; }
     public string ClientName { get; set; } = string.Empty;
+    public long? TotalRamMb { get; set; }
+    public int? TotalDiskGb { get; set; }
+    public string? AntivirusSummary { get; set; }
+    /// <summary>Nome do processador (WMI).</summary>
+    public string? CpuSummary { get; set; }
+    /// <summary>Ultimo arranque do SO reportado pelo agente (WMI).</summary>
+    public DateTimeOffset? LastOsBootAt { get; set; }
+    /// <summary>Notas internas editadas no painel.</summary>
+    public string? Notes { get; set; }
     public string Hostname { get; set; } = string.Empty;
     public string OperatingSystem { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;

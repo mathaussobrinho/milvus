@@ -1,6 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/client-api";
+import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -66,7 +67,9 @@ export function AnalystsManager({ initial }: Props) {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(j?.error ?? "Nao foi possivel criar o analista.");
+        const message = j?.error ?? "Nao foi possivel criar o analista.";
+        setError(message);
+        showToast({ title: "Erro ao criar analista", description: message, variant: "error" });
         return;
       }
       setName("");
@@ -75,8 +78,14 @@ export function AnalystsManager({ initial }: Props) {
       setPhone("");
       setMustChangeOnNextLogin(false);
       await refresh();
+      showToast({
+        title: "Analista criado",
+        description: "Cadastro salvo com sucesso.",
+        variant: "success",
+      });
     } catch {
       setError("Falha de rede.");
+      showToast({ title: "Erro ao criar analista", description: "Falha de rede.", variant: "error" });
     } finally {
       setBusy(false);
     }
@@ -109,14 +118,22 @@ export function AnalystsManager({ initial }: Props) {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(j?.error ?? "Nao foi possivel salvar.");
+        const message = j?.error ?? "Nao foi possivel salvar.";
+        setError(message);
+        showToast({ title: "Erro ao salvar analista", description: message, variant: "error" });
         return;
       }
       setEditingId(null);
       setEditPassword("");
       await refresh();
+      showToast({
+        title: "Analista atualizado",
+        description: "Alteracoes salvas com sucesso.",
+        variant: "success",
+      });
     } catch {
       setError("Falha de rede.");
+      showToast({ title: "Erro ao salvar analista", description: "Falha de rede.", variant: "error" });
     } finally {
       setBusy(false);
     }

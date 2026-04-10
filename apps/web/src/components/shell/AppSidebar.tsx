@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SidebarProfile } from "@/components/shell/SidebarProfile";
 
 const mainNav = [
@@ -24,6 +24,7 @@ const cadastrosSub = [
 
 const configSub = [
   { href: "/configuracoes/perfil", label: "Perfil" },
+  { href: "/configuracoes/agente", label: "Agente" },
   { href: "/configuracoes/integracoes", label: "Integracoes" },
   { href: "/configuracoes/automacoes", label: "Automacoes" },
 ];
@@ -34,6 +35,19 @@ export function AppSidebar() {
   const configActive = pathname.startsWith("/configuracoes");
   const [cadastrosOpen, setCadastrosOpen] = useState(cadastrosActive);
   const [configOpen, setConfigOpen] = useState(configActive);
+
+  function collapseSubmenus() {
+    setCadastrosOpen(false);
+    setConfigOpen(false);
+  }
+
+  useEffect(() => {
+    if (!pathname.startsWith("/cadastros")) setCadastrosOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/configuracoes")) setConfigOpen(false);
+  }, [pathname]);
 
   return (
     <aside className="relative flex min-h-screen w-56 shrink-0 flex-col border-r border-border bg-surface text-foreground shadow-[inset_-1px_0_0_rgba(0,72,255,0.06)]">
@@ -60,6 +74,7 @@ export function AppSidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={collapseSubmenus}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? "bg-primary text-white shadow-[0_4px_14px_rgba(0,72,255,0.28)]"

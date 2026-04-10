@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { apiFetch } from "@/lib/client-api";
+import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -59,15 +60,23 @@ export function ClientesManager({ initial }: Props) {
         }),
       });
       if (!res.ok) {
-        setError("Nao foi possivel criar o cliente.");
+        const message = "Nao foi possivel criar o cliente.";
+        setError(message);
+        showToast({ title: "Erro ao criar cliente", description: message, variant: "error" });
         return;
       }
       setName("");
       setEmail("");
       setPhone("");
       await refresh();
+      showToast({
+        title: "Cliente criado",
+        description: "Cadastro salvo com sucesso.",
+        variant: "success",
+      });
     } catch {
       setError("Falha de rede.");
+      showToast({ title: "Erro ao criar cliente", description: "Falha de rede.", variant: "error" });
     } finally {
       setBusy(false);
     }
@@ -96,13 +105,21 @@ export function ClientesManager({ initial }: Props) {
         }),
       });
       if (!res.ok) {
-        setError("Nao foi possivel salvar.");
+        const message = "Nao foi possivel salvar.";
+        setError(message);
+        showToast({ title: "Erro ao salvar cliente", description: message, variant: "error" });
         return;
       }
       setEditingId(null);
       await refresh();
+      showToast({
+        title: "Cliente atualizado",
+        description: "Alteracoes salvas com sucesso.",
+        variant: "success",
+      });
     } catch {
       setError("Falha de rede.");
+      showToast({ title: "Erro ao salvar cliente", description: "Falha de rede.", variant: "error" });
     } finally {
       setBusy(false);
     }

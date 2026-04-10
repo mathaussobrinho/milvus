@@ -1,6 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/client-api";
+import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -113,13 +114,25 @@ export function NewTicketModal({ open, onClose }: Props) {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(j?.error ?? "Falha ao criar ticket.");
+        const message = j?.error ?? "Falha ao criar ticket.";
+        setError(message);
+        showToast({ title: "Erro ao abrir ticket", description: message, variant: "error" });
         return;
       }
       onClose();
       router.refresh();
+      showToast({
+        title: "Ticket aberto",
+        description: "Chamado criado com sucesso.",
+        variant: "success",
+      });
     } catch {
       setError("Nao foi possivel conectar a API.");
+      showToast({
+        title: "Erro ao abrir ticket",
+        description: "Nao foi possivel conectar a API.",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }

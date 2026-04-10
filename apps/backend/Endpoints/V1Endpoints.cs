@@ -114,6 +114,8 @@ public static class V1Endpoints
                     t.Priority,
                     t.ClientId,
                     t.Client != null ? t.Client.Name : null,
+                    t.AssigneeAnalystId,
+                    t.AssigneeAnalyst != null ? t.AssigneeAnalyst.Name : null,
                     t.DeviceId,
                     t.CreatedAt,
                     t.UpdatedAt))
@@ -126,6 +128,7 @@ public static class V1Endpoints
         {
             var ticket = await db.Tickets.AsNoTracking()
                 .Include(t => t.Client)
+                .Include(t => t.AssigneeAnalyst)
                 .FirstOrDefaultAsync(t => t.Id == id);
             if (ticket is null)
                 return Results.NotFound();
@@ -152,6 +155,8 @@ public static class V1Endpoints
                 ticket.Priority,
                 ticket.ClientId,
                 ticket.Client != null ? ticket.Client.Name : null,
+                ticket.AssigneeAnalystId,
+                ticket.AssigneeAnalyst != null ? ticket.AssigneeAnalyst.Name : null,
                 ticket.DeviceId,
                 ticket.CreatedAt,
                 ticket.UpdatedAt,
@@ -279,6 +284,21 @@ public static class V1Endpoints
             if (body.DeviceId.HasValue)
                 ticket.DeviceId = body.DeviceId.Value == Guid.Empty ? null : body.DeviceId;
 
+            if (body.UpdateAssignee == true)
+            {
+                if (!body.AssigneeAnalystId.HasValue || body.AssigneeAnalystId == Guid.Empty)
+                {
+                    ticket.AssigneeAnalystId = null;
+                }
+                else
+                {
+                    var analystOk = await db.Analysts.AnyAsync(a => a.Id == body.AssigneeAnalystId.Value);
+                    if (!analystOk)
+                        return Results.BadRequest(new { error = "Analista invalido." });
+                    ticket.AssigneeAnalystId = body.AssigneeAnalystId;
+                }
+            }
+
             ticket.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -310,6 +330,7 @@ public static class V1Endpoints
                 var online = d.IsOnline && (now - seen) <= offlineThreshold;
                 return new DeviceListItemDto(
                     d.Id,
+                    d.ClientId,
                     d.ClientName,
                     d.Hostname,
                     d.IpAddress,
@@ -319,10 +340,83 @@ public static class V1Endpoints
                     online,
                     alertCounts.GetValueOrDefault(d.Id, 0),
                     ticketCounts.GetValueOrDefault(d.Id, 0),
-                    d.LastSeenAt);
+                    d.LastSeenAt,
+                    d.TotalRamMb,
+                    d.TotalDiskGb,
+                    d.AntivirusSummary,
+                    d.CpuSummary,
+                    d.LastOsBootAt);
             }).OrderBy(d => d.ClientName).ThenBy(d => d.Hostname).ToList();
 
             return Results.Ok(list);
+        });
+
+        v1.MapGet("/devices/{id:guid}", async (Guid id, VisoHelpDbContext db) =>
+        {
+            var d = await db.Devices.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (d is null)
+                return Results.NotFound();
+
+            var unresolved = await db.DeviceAlerts.AsNoTracking()
+                .Where(a => !a.IsResolved && a.DeviceId == id)
+                .CountAsync();
+            var openTk = await db.Tickets.AsNoTracking()
+                .CountAsync(t => t.DeviceId == id && t.Status != "closed");
+
+            var offlineThreshold = TimeSpan.FromMinutes(5);
+            var now = DateTimeOffset.UtcNow;
+            var online = d.IsOnline && (now - d.LastSeenAt) <= offlineThreshold;
+
+            return Results.Ok(new DeviceDetailDto(
+                d.Id,
+                d.ClientId,
+                d.ClientName,
+                d.Hostname,
+                d.IpAddress,
+                d.MacAddress,
+                d.Username,
+                d.OperatingSystem,
+                online,
+                unresolved,
+                openTk,
+                d.LastSeenAt,
+                d.TotalRamMb,
+                d.TotalDiskGb,
+                d.AntivirusSummary,
+                d.CpuSummary,
+                d.LastOsBootAt,
+                d.Notes,
+                d.AgentKey,
+                d.CreatedAt));
+        });
+
+        v1.MapPatch("/devices/{id:guid}", async (Guid id, PatchDeviceRequest body, VisoHelpDbContext db) =>
+        {
+            var device = await db.Devices.FirstOrDefaultAsync(x => x.Id == id);
+            if (device is null)
+                return Results.NotFound();
+
+            if (body.ClearClientId == true)
+                device.ClientId = null;
+            else if (body.ClientId.HasValue)
+            {
+                var ok = await db.Clients.AnyAsync(c => c.Id == body.ClientId.Value);
+                if (!ok)
+                    return Results.BadRequest(new { error = "Cliente invalido." });
+                device.ClientId = body.ClientId;
+            }
+
+            if (body.ClientName != null)
+                device.ClientName = string.IsNullOrWhiteSpace(body.ClientName) ? device.ClientName : body.ClientName.Trim();
+            if (body.Hostname != null)
+                device.Hostname = string.IsNullOrWhiteSpace(body.Hostname) ? device.Hostname : body.Hostname.Trim();
+            if (body.Username != null)
+                device.Username = body.Username.Trim();
+            if (body.Notes != null)
+                device.Notes = string.IsNullOrWhiteSpace(body.Notes) ? null : body.Notes.Trim();
+
+            await db.SaveChangesAsync();
+            return Results.NoContent();
         });
 
         v1.MapGet("/clients", async (VisoHelpDbContext db) =>
@@ -351,7 +445,6 @@ public static class V1Endpoints
 
             var tickets = await db.Tickets
                 .AsNoTracking()
-                .Include(t => t.Client)
                 .Where(t => t.ClientId == id)
                 .OrderByDescending(t => t.UpdatedAt)
                 .Select(t => new TicketListItemDto(
@@ -362,9 +455,28 @@ public static class V1Endpoints
                     t.Priority,
                     t.ClientId,
                     t.Client != null ? t.Client.Name : null,
+                    t.AssigneeAnalystId,
+                    t.AssigneeAnalyst != null ? t.AssigneeAnalyst.Name : null,
                     t.DeviceId,
                     t.CreatedAt,
                     t.UpdatedAt))
+                .ToListAsync();
+
+            var employees = await db.ClientEmployees
+                .AsNoTracking()
+                .Where(e => e.ClientId == id)
+                .OrderByDescending(e => e.IsPrimary)
+                .ThenBy(e => e.Name)
+                .Select(e => new ClientEmployeeDto(
+                    e.Id,
+                    e.Name,
+                    e.Department,
+                    e.Role,
+                    e.Email,
+                    e.Phone,
+                    e.IsPrimary,
+                    e.CreatedAt,
+                    e.UpdatedAt))
                 .ToListAsync();
 
             return Results.Ok(new ClientDetailDto(
@@ -375,7 +487,8 @@ public static class V1Endpoints
                 client.Phone,
                 client.CreatedAt,
                 client.UpdatedAt,
-                tickets));
+                tickets,
+                employees));
         });
 
         v1.MapPost("/clients", async (CreateClientRequest body, VisoHelpDbContext db) =>
@@ -429,6 +542,114 @@ public static class V1Endpoints
                 return Results.NotFound();
 
             db.Clients.Remove(client);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        v1.MapPost("/clients/{clientId:guid}/employees", async (Guid clientId, CreateClientEmployeeRequest body, VisoHelpDbContext db) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Name))
+                return Results.BadRequest(new { error = "Nome do funcionario obrigatorio." });
+
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId);
+            if (client is null)
+                return Results.NotFound(new { error = "Cliente nao encontrado." });
+
+            var now = DateTimeOffset.UtcNow;
+            var employee = new ClientEmployee
+            {
+                TenantId = client.TenantId,
+                ClientId = clientId,
+                Name = body.Name.Trim(),
+                Department = string.IsNullOrWhiteSpace(body.Department) ? null : body.Department.Trim(),
+                Role = string.IsNullOrWhiteSpace(body.Role) ? null : body.Role.Trim(),
+                Email = string.IsNullOrWhiteSpace(body.Email) ? null : body.Email.Trim(),
+                Phone = string.IsNullOrWhiteSpace(body.Phone) ? null : body.Phone.Trim(),
+                IsPrimary = body.IsPrimary == true,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            if (employee.IsPrimary)
+            {
+                var currentPrimary = await db.ClientEmployees
+                    .Where(e => e.ClientId == clientId && e.IsPrimary)
+                    .ToListAsync();
+                foreach (var item in currentPrimary)
+                {
+                    item.IsPrimary = false;
+                    item.UpdatedAt = now;
+                }
+            }
+
+            db.ClientEmployees.Add(employee);
+            client.UpdatedAt = now;
+            await db.SaveChangesAsync();
+
+            return Results.Created($"/api/v1/clients/{clientId}/employees/{employee.Id}", new { employee.Id });
+        });
+
+        v1.MapPatch("/clients/{clientId:guid}/employees/{employeeId:guid}", async (Guid clientId, Guid employeeId, PatchClientEmployeeRequest body, VisoHelpDbContext db) =>
+        {
+            var employee = await db.ClientEmployees
+                .FirstOrDefaultAsync(e => e.Id == employeeId && e.ClientId == clientId);
+            if (employee is null)
+                return Results.NotFound(new { error = "Funcionario nao encontrado." });
+
+            if (body.Name is not null)
+            {
+                if (string.IsNullOrWhiteSpace(body.Name))
+                    return Results.BadRequest(new { error = "Nome do funcionario obrigatorio." });
+                employee.Name = body.Name.Trim();
+            }
+
+            if (body.Department is not null)
+                employee.Department = string.IsNullOrWhiteSpace(body.Department) ? null : body.Department.Trim();
+            if (body.Role is not null)
+                employee.Role = string.IsNullOrWhiteSpace(body.Role) ? null : body.Role.Trim();
+            if (body.Email is not null)
+                employee.Email = string.IsNullOrWhiteSpace(body.Email) ? null : body.Email.Trim();
+            if (body.Phone is not null)
+                employee.Phone = string.IsNullOrWhiteSpace(body.Phone) ? null : body.Phone.Trim();
+
+            var now = DateTimeOffset.UtcNow;
+            if (body.IsPrimary.HasValue)
+            {
+                employee.IsPrimary = body.IsPrimary.Value;
+                if (employee.IsPrimary)
+                {
+                    var others = await db.ClientEmployees
+                        .Where(e => e.ClientId == clientId && e.Id != employeeId && e.IsPrimary)
+                        .ToListAsync();
+                    foreach (var other in others)
+                    {
+                        other.IsPrimary = false;
+                        other.UpdatedAt = now;
+                    }
+                }
+            }
+
+            employee.UpdatedAt = now;
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId);
+            if (client is not null)
+                client.UpdatedAt = now;
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        v1.MapDelete("/clients/{clientId:guid}/employees/{employeeId:guid}", async (Guid clientId, Guid employeeId, VisoHelpDbContext db) =>
+        {
+            var employee = await db.ClientEmployees
+                .FirstOrDefaultAsync(e => e.Id == employeeId && e.ClientId == clientId);
+            if (employee is null)
+                return Results.NotFound();
+
+            db.ClientEmployees.Remove(employee);
+
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId);
+            if (client is not null)
+                client.UpdatedAt = DateTimeOffset.UtcNow;
+
             await db.SaveChangesAsync();
             return Results.NoContent();
         });

@@ -1,6 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/client-api";
+import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 export type TicketDetail = {
@@ -12,6 +13,8 @@ export type TicketDetail = {
   priority: string;
   clientId: string | null;
   clientName: string | null;
+  assigneeAnalystId: string | null;
+  assigneeName: string | null;
   deviceId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +31,7 @@ export type TicketDetail = {
 
 type ClientOption = { id: string; name: string };
 type DeviceOption = { id: string; hostname: string; clientName: string };
+type AnalystOption = { id: string; name: string };
 
 type Props = {
   ticketId: string | null;
@@ -50,6 +54,8 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
   const [editStatus, setEditStatus] = useState("open");
   const [editClientId, setEditClientId] = useState("");
   const [editDeviceId, setEditDeviceId] = useState("");
+  const [editAssigneeId, setEditAssigneeId] = useState("");
+  const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -71,6 +77,7 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
       setEditStatus(data.status);
       setEditClientId(data.clientId ?? "");
       setEditDeviceId(data.deviceId ?? "");
+      setEditAssigneeId(data.assigneeAnalystId ?? "");
     } catch {
       setLoadError("Falha de rede.");
       setDetail(null);
@@ -93,9 +100,10 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const [cRes, dRes] = await Promise.all([
+        const [cRes, dRes, aRes] = await Promise.all([
           apiFetch("/api/v1/clients"),
           apiFetch("/api/v1/devices"),
+          apiFetch("/api/v1/analysts"),
         ]);
         if (cancelled) return;
         if (cRes.ok) {
@@ -115,6 +123,10 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
               clientName: d.clientName,
             })),
           );
+        }
+        if (aRes.ok) {
+          const list = (await aRes.json()) as { id: string; name: string }[];
+          setAnalysts(list.map((x) => ({ id: x.id, name: x.name })));
         }
       } catch {
         /* ignore */
@@ -162,6 +174,8 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
         status: editStatus,
         clientId: editClientId,
         deviceId: editDeviceId || null,
+        updateAssignee: true,
+        assigneeAnalystId: editAssigneeId ? editAssigneeId : null,
       };
       const res = await apiFetch(`/api/v1/tickets/${ticketId}`, {
         method: "PATCH",
@@ -170,13 +184,21 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setSaveError(j?.error ?? "Nao foi possivel salvar.");
+        const message = j?.error ?? "Nao foi possivel salvar.";
+        setSaveError(message);
+        showToast({ title: "Erro ao salvar ticket", description: message, variant: "error" });
         return;
       }
       await load();
       router.refresh();
+      showToast({
+        title: "Ticket atualizado",
+        description: "Alteracoes salvas com sucesso.",
+        variant: "success",
+      });
     } catch {
       setSaveError("Falha de rede.");
+      showToast({ title: "Erro ao salvar ticket", description: "Falha de rede.", variant: "error" });
     } finally {
       setSaving(false);
     }
@@ -186,7 +208,7 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/35 p-4"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/35 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ticket-detail-title"
@@ -360,6 +382,24 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
                     {devices.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.clientName} — {d.hostname}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted" htmlFor="ed-asg">
+                    Responsavel (analista)
+                  </label>
+                  <select
+                    id="ed-asg"
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    value={editAssigneeId}
+                    onChange={(e) => setEditAssigneeId(e.target.value)}
+                  >
+                    <option value="">Nenhum</option>
+                    {analysts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
                       </option>
                     ))}
                   </select>

@@ -21,6 +21,8 @@ export type TicketRow = {
   priority: string;
   clientId: string | null;
   clientName: string | null;
+  assigneeAnalystId: string | null;
+  assigneeName: string | null;
   deviceId: string | null;
   createdAt: string;
   updatedAt: string;

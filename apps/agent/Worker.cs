@@ -8,62 +8,127 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly IHttpClientFactory _httpFactory;
     private readonly IConfiguration _config;
+    private readonly AgentSyncCoordinator _syncCoordinator;
     private readonly string _agentKey = AgentKeyStore.GetOrCreate();
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
 
     public Worker(
         ILogger<Worker> logger,
         IHttpClientFactory httpFactory,
-        IConfiguration config)
+        IConfiguration config,
+        AgentSyncCoordinator syncCoordinator)
     {
         _logger = logger;
         _httpFactory = httpFactory;
         _config = config;
+        _syncCoordinator = syncCoordinator;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var baseUrl = _config["VisoHelp:ApiBase"]?.Trim().TrimEnd('/') ?? "http://127.0.0.1:5212";
-        var clientName = _config["VisoHelp:ClientName"]?.Trim();
-        if (string.IsNullOrEmpty(clientName))
-            clientName = Environment.MachineName;
+        await RunSyncOnceAsync(stoppingToken);
 
+        var periodic = RunPeriodicAsync(stoppingToken);
+        var immediate = RunImmediateChannelAsync(stoppingToken);
+        await Task.WhenAll(periodic, immediate);
+    }
+
+    private async Task RunPeriodicAsync(CancellationToken stoppingToken)
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var client = _httpFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(30);
-
-                var body = new
-                {
-                    agentKey = _agentKey,
-                    hostname = Environment.MachineName,
-                    username = Environment.UserName,
-                    operatingSystem = Environment.OSVersion.VersionString,
-                    ipAddress = GetPrimaryIPv4(),
-                    macAddress = GetPrimaryMac(),
-                    clientName
-                };
-
-                var response = await client.PostAsJsonAsync(
-                    $"{baseUrl}/api/v1/agent/sync",
-                    body,
-                    stoppingToken);
-
-                if (response.IsSuccessStatusCode)
-                    _logger.LogInformation("VisoHelp: inventario sincronizado com a API.");
-                else
-                    _logger.LogWarning(
-                        "VisoHelp: falha ao sincronizar ({Status}). API em {Base}",
-                        (int)response.StatusCode,
-                        baseUrl);
+                await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
-                _logger.LogWarning(ex, "VisoHelp: erro ao contatar a API.");
+                break;
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
+            await RunSyncOnceAsync(stoppingToken);
+        }
+    }
+
+    private async Task RunImmediateChannelAsync(CancellationToken stoppingToken)
+    {
+        await foreach (var _ in _syncCoordinator.Reader.ReadAllAsync(stoppingToken))
+            await RunSyncOnceAsync(stoppingToken);
+    }
+
+    private async Task RunSyncOnceAsync(CancellationToken stoppingToken)
+    {
+        if (!await _syncGate.WaitAsync(0, stoppingToken))
+            return;
+
+        try
+        {
+            await DoSyncAsync(stoppingToken);
+        }
+        finally
+        {
+            _syncGate.Release();
+        }
+    }
+
+    private async Task DoSyncAsync(CancellationToken stoppingToken)
+    {
+        var baseUrl = _config["VisoHelp:ApiBase"]?.Trim().TrimEnd('/') ?? "http://127.0.0.1:5212";
+        var publicCode = _config["VisoHelp:ClientPublicCode"]?.Trim() ?? "";
+        var clientName = _config["VisoHelp:ClientName"]?.Trim();
+        if (string.IsNullOrEmpty(clientName))
+            clientName = Environment.MachineName;
+
+        var ramMb = HardwareInfo.TryGetTotalRamMb();
+        var diskGb = HardwareInfo.TryGetSystemDiskGb();
+        var av = HardwareInfo.TryGetAntivirusSummary();
+        var cpu = HardwareInfo.TryGetCpuName();
+        var lastBoot = HardwareInfo.TryGetLastOsBootUtc();
+
+        try
+        {
+            var client = _httpFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+
+            var body = new Dictionary<string, object?>
+            {
+                ["agentKey"] = _agentKey,
+                ["hostname"] = Environment.MachineName,
+                ["username"] = Environment.UserName,
+                ["operatingSystem"] = Environment.OSVersion.VersionString,
+                ["ipAddress"] = GetPrimaryIPv4(),
+                ["macAddress"] = GetPrimaryMac(),
+                ["clientName"] = clientName
+            };
+
+            if (!string.IsNullOrWhiteSpace(publicCode))
+                body["clientPublicCode"] = publicCode;
+            if (ramMb.HasValue)
+                body["totalRamMb"] = ramMb.Value;
+            if (diskGb.HasValue)
+                body["totalDiskGb"] = diskGb.Value;
+            body["antivirusSummary"] = av;
+            if (!string.IsNullOrWhiteSpace(cpu))
+                body["cpuSummary"] = cpu;
+            if (lastBoot.HasValue)
+                body["lastOsBootAt"] = lastBoot.Value;
+
+            var response = await client.PostAsJsonAsync(
+                $"{baseUrl}/api/v1/agent/sync",
+                body,
+                stoppingToken);
+
+            if (response.IsSuccessStatusCode)
+                _logger.LogInformation("VisoHelp: inventario sincronizado com a API.");
+            else
+                _logger.LogWarning(
+                    "VisoHelp: falha ao sincronizar ({Status}). API em {Base}",
+                    (int)response.StatusCode,
+                    baseUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "VisoHelp: erro ao contatar a API.");
         }
     }
 

@@ -158,6 +158,68 @@ namespace VisoHelp.Api.Migrations
                     b.ToTable("clients", (string)null);
                 });
 
+            modelBuilder.Entity("VisoHelp.Api.Domain.ClientEmployee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("department");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("email");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_primary");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId", "Name");
+
+                    b.ToTable("client_employees", (string)null);
+                });
+
             modelBuilder.Entity("VisoHelp.Api.Domain.Device", b =>
                 {
                     b.Property<Guid>("Id")
@@ -171,11 +233,25 @@ namespace VisoHelp.Api.Migrations
                         .HasColumnType("character varying(80)")
                         .HasColumnName("agent_key");
 
+                    b.Property<string>("AntivirusSummary")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("antivirus_summary");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_id");
+
                     b.Property<string>("ClientName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("client_name");
+
+                    b.Property<string>("CpuSummary")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("cpu_summary");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -197,6 +273,10 @@ namespace VisoHelp.Api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_online");
 
+                    b.Property<DateTimeOffset?>("LastOsBootAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_os_boot_at");
+
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_seen_at");
@@ -206,6 +286,11 @@ namespace VisoHelp.Api.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)")
                         .HasColumnName("mac_address");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("notes");
 
                     b.Property<string>("OperatingSystem")
                         .IsRequired()
@@ -219,6 +304,14 @@ namespace VisoHelp.Api.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("tenant_id");
 
+                    b.Property<int?>("TotalDiskGb")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_disk_gb");
+
+                    b.Property<long?>("TotalRamMb")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_ram_mb");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -229,6 +322,8 @@ namespace VisoHelp.Api.Migrations
 
                     b.HasIndex("AgentKey")
                         .IsUnique();
+
+                    b.HasIndex("ClientId");
 
                     b.ToTable("devices", (string)null);
                 });
@@ -339,6 +434,10 @@ namespace VisoHelp.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AssigneeAnalystId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assignee_analyst_id");
+
                     b.Property<Guid?>("ClientId")
                         .HasColumnType("uuid")
                         .HasColumnName("client_id");
@@ -367,6 +466,26 @@ namespace VisoHelp.Api.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("priority");
 
+                    b.Property<string>("RequesterDepartment")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("requester_department");
+
+                    b.Property<string>("RequesterEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("requester_email");
+
+                    b.Property<string>("RequesterName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("requester_name");
+
+                    b.Property<string>("RequesterPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("requester_phone");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -390,6 +509,8 @@ namespace VisoHelp.Api.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssigneeAnalystId");
 
                     b.HasIndex("ClientId");
 
@@ -471,6 +592,27 @@ namespace VisoHelp.Api.Migrations
                     b.Navigation("Team");
                 });
 
+            modelBuilder.Entity("VisoHelp.Api.Domain.ClientEmployee", b =>
+                {
+                    b.HasOne("VisoHelp.Api.Domain.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("VisoHelp.Api.Domain.Device", b =>
+                {
+                    b.HasOne("VisoHelp.Api.Domain.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Client");
+                });
+
             modelBuilder.Entity("VisoHelp.Api.Domain.PasswordResetToken", b =>
                 {
                     b.HasOne("VisoHelp.Api.Domain.Analyst", "Analyst")
@@ -484,6 +626,11 @@ namespace VisoHelp.Api.Migrations
 
             modelBuilder.Entity("VisoHelp.Api.Domain.Ticket", b =>
                 {
+                    b.HasOne("VisoHelp.Api.Domain.Analyst", "AssigneeAnalyst")
+                        .WithMany()
+                        .HasForeignKey("AssigneeAnalystId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("VisoHelp.Api.Domain.Client", "Client")
                         .WithMany()
                         .HasForeignKey("ClientId")
@@ -493,6 +640,8 @@ namespace VisoHelp.Api.Migrations
                         .WithMany()
                         .HasForeignKey("DeviceId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AssigneeAnalyst");
 
                     b.Navigation("Client");
                 });

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/client-api";
+import { AVATAR_MAX_BYTES, compressImageFileToDataUrl } from "@/lib/compress-image";
+import { showToast } from "@/lib/toast";
 
 type Profile = {
   id: string;
@@ -23,6 +25,7 @@ export function PerfilForm() {
   const [busy, setBusy] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarPending, setAvatarPending] = useState<string | null>(null);
+  const [avatarCompressing, setAvatarCompressing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +74,13 @@ export function PerfilForm() {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setSaveError(j?.error ?? "Nao foi possivel salvar.");
+        const message = j?.error ?? "Nao foi possivel salvar.";
+        setSaveError(message);
+        showToast({
+          title: "Erro ao salvar perfil",
+          description: message,
+          variant: "error",
+        });
         return;
       }
       const refreshed = await apiFetch("/api/v1/account/profile");
@@ -82,8 +91,18 @@ export function PerfilForm() {
         setAvatarPending(null);
       }
       window.dispatchEvent(new Event("visohelp-profile-changed"));
+      showToast({
+        title: "Perfil salvo",
+        description: "As alteracoes foram gravadas com sucesso.",
+        variant: "success",
+      });
     } catch {
       setSaveError("Falha de rede.");
+      showToast({
+        title: "Erro ao salvar perfil",
+        description: "Falha de rede.",
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -132,27 +151,33 @@ export function PerfilForm() {
                 )}
               </div>
               <div className="flex flex-col gap-2 text-sm">
-                <label className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-center font-medium hover:bg-background/80">
-                  Carregar imagem
+                <label
+                  className={`cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-center font-medium hover:bg-background/80 ${avatarCompressing ? "pointer-events-none opacity-60" : ""}`}
+                >
+                  {avatarCompressing ? "Otimizando..." : "Carregar imagem"}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     className="sr-only"
+                    disabled={avatarCompressing}
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (!f) return;
-                      if (f.size > 450 * 1024) {
-                        setSaveError("Imagem muito grande (max. ~450 KB).");
-                        return;
-                      }
-                      const r = new FileReader();
-                      r.onload = () => {
-                        const url = r.result as string;
-                        setAvatarPending(url);
-                        setSaveError(null);
-                      };
-                      r.readAsDataURL(f);
                       e.target.value = "";
+                      if (!f) return;
+                      setSaveError(null);
+                      setAvatarCompressing(true);
+                      void (async () => {
+                        try {
+                          const dataUrl = await compressImageFileToDataUrl(f, AVATAR_MAX_BYTES);
+                          setAvatarPending(dataUrl);
+                        } catch (err) {
+                          setSaveError(
+                            err instanceof Error ? err.message : "Falha ao processar a imagem."
+                          );
+                        } finally {
+                          setAvatarCompressing(false);
+                        }
+                      })();
                     }}
                   />
                 </label>
@@ -169,7 +194,8 @@ export function PerfilForm() {
               </div>
             </div>
             <p className="mt-1 text-xs text-muted">
-              JPEG, PNG, WebP ou GIF. Aparece na barra lateral. Sera salva ao clicar em Salvar.
+              JPEG, PNG, WebP ou GIF. A foto e ajustada automaticamente para no maximo ~450 KB (JPEG).
+              Aparece na barra lateral; salve com &quot;Salvar alteracoes&quot;.
             </p>
           </div>
           <div>
@@ -210,7 +236,7 @@ export function PerfilForm() {
           ) : null}
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || avatarCompressing}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
           >
             {busy ? "Salvando..." : "Salvar alteracoes"}

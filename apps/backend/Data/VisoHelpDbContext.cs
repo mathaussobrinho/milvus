@@ -9,6 +9,7 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
     public DbSet<DeviceAlert> DeviceAlerts => Set<DeviceAlert>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Client> Clients => Set<Client>();
+    public DbSet<ClientEmployee> ClientEmployees => Set<ClientEmployee>();
     public DbSet<Analyst> Analysts => Set<Analyst>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<AnalystTeam> AnalystTeams => Set<AnalystTeam>();
@@ -33,7 +34,18 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
             entity.Property(d => d.IsOnline).HasColumnName("is_online");
             entity.Property(d => d.LastSeenAt).HasColumnName("last_seen_at");
             entity.Property(d => d.CreatedAt).HasColumnName("created_at");
+            entity.Property(d => d.ClientId).HasColumnName("client_id");
+            entity.Property(d => d.TotalRamMb).HasColumnName("total_ram_mb");
+            entity.Property(d => d.TotalDiskGb).HasColumnName("total_disk_gb");
+            entity.Property(d => d.AntivirusSummary).HasColumnName("antivirus_summary").HasMaxLength(200);
+            entity.Property(d => d.CpuSummary).HasColumnName("cpu_summary").HasMaxLength(300);
+            entity.Property(d => d.LastOsBootAt).HasColumnName("last_os_boot_at");
+            entity.Property(d => d.Notes).HasColumnName("notes").HasMaxLength(2000);
             entity.HasIndex(d => d.AgentKey).IsUnique();
+            entity.HasOne(d => d.Client)
+                .WithMany()
+                .HasForeignKey(d => d.ClientId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<DeviceAlert>(entity =>
@@ -59,7 +71,12 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
                 .HasMaxLength(4000);
             entity.Property(t => t.Description).HasColumnName("description").HasMaxLength(4000);
             entity.Property(t => t.ClientId).HasColumnName("client_id");
+            entity.Property(t => t.AssigneeAnalystId).HasColumnName("assignee_analyst_id");
             entity.Property(t => t.DeviceId).HasColumnName("device_id");
+            entity.Property(t => t.RequesterName).HasColumnName("requester_name").HasMaxLength(200);
+            entity.Property(t => t.RequesterEmail).HasColumnName("requester_email").HasMaxLength(200);
+            entity.Property(t => t.RequesterPhone).HasColumnName("requester_phone").HasMaxLength(50);
+            entity.Property(t => t.RequesterDepartment).HasColumnName("requester_department").HasMaxLength(120);
             entity.Property(t => t.Status).HasColumnName("status").HasMaxLength(30).IsRequired();
             entity.Property(t => t.Priority).HasColumnName("priority").HasMaxLength(30).IsRequired();
             entity.Property(t => t.CreatedAt).HasColumnName("created_at");
@@ -68,6 +85,10 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
                 .WithMany()
                 .HasForeignKey(t => t.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(t => t.AssigneeAnalyst)
+                .WithMany()
+                .HasForeignKey(t => t.AssigneeAnalystId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.HasOne<Device>()
                 .WithMany()
                 .HasForeignKey(t => t.DeviceId)
@@ -112,6 +133,30 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
             entity.HasIndex(c => new { c.TenantId, c.PublicCode })
                 .IsUnique()
                 .HasFilter("public_code IS NOT NULL");
+        });
+
+        modelBuilder.Entity<ClientEmployee>(entity =>
+        {
+            entity.ToTable("client_employees");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ClientId).HasColumnName("client_id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Department).HasColumnName("department").HasMaxLength(120);
+            entity.Property(e => e.Role).HasColumnName("role").HasMaxLength(120);
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(200);
+            entity.Property(e => e.Phone).HasColumnName("phone").HasMaxLength(50);
+            entity.Property(e => e.IsPrimary).HasColumnName("is_primary");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(e => e.Client)
+                .WithMany()
+                .HasForeignKey(e => e.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.ClientId, e.Name });
         });
 
         modelBuilder.Entity<Analyst>(entity =>
