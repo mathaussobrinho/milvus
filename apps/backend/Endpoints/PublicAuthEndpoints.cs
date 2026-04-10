@@ -102,34 +102,63 @@ public static class PublicAuthEndpoints
         return Results.Created($"/api/v1/tickets/{ticket.Id}", new { ticket.Id });
     }
 
-    /// <summary>Chamados abertos nesta maquina (KEY + agentKey → dispositivo).</summary>
+    /// <summary>
+    /// Lista chamados do portal: por agente (KEY + agentKey → dispositivo) e/ou pelo e-mail do solicitante.
+    /// Chamados abertos so no browser (sem DeviceId) aparecem quando se informa o mesmo e-mail.
+    /// </summary>
     private static async Task<IResult> PublicMyTicketsAsync(
         string? code,
         string? agentKey,
+        string? email,
         VisoHelpDbContext db)
     {
         var normalized = NormalizePublicCode(code);
         var key = agentKey?.Trim() ?? "";
+        var emailNorm = NormalizeEmail(email);
         if (normalized.Length == 0)
             return Results.BadRequest(new { error = "Codigo obrigatorio." });
-        if (key.Length == 0)
-            return Results.BadRequest(new
-            {
-                error = "Codigo do agente obrigatorio. Abra esta pagina pelo atalho VisoHelp na maquina."
-            });
 
         var client = await db.Clients.AsNoTracking()
             .FirstOrDefaultAsync(c => c.TenantId == "default" && c.PublicCode == normalized);
         if (client is null)
             return Results.BadRequest(new { error = "Codigo invalido." });
 
-        var device = await db.Devices.AsNoTracking()
-            .FirstOrDefaultAsync(d => d.AgentKey == key && d.ClientId == client.Id);
-        if (device is null)
-            return Results.BadRequest(new { error = "Agente invalido ou nao pertence a este cliente." });
+        if (key.Length == 0 && (emailNorm.Length == 0 || !emailNorm.Contains('@', StringComparison.Ordinal)))
+            return Results.BadRequest(new
+            {
+                error =
+                    "Informe o e-mail do solicitante ou abra esta pagina pelo atalho VisoHelp (codigo do agente na URL)."
+            });
 
-        var list = await db.Tickets.AsNoTracking()
-            .Where(t => t.ClientId == client.Id && t.DeviceId == device.Id)
+        Device? device = null;
+        if (key.Length > 0)
+        {
+            device = await db.Devices.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.AgentKey == key && d.ClientId == client.Id);
+            if (device is null)
+                return Results.BadRequest(new { error = "Agente invalido ou nao pertence a este cliente." });
+        }
+
+        IQueryable<Ticket> query = db.Tickets.AsNoTracking().Where(t => t.ClientId == client.Id);
+
+        if (device is not null && emailNorm.Length > 0 && emailNorm.Contains('@', StringComparison.Ordinal))
+        {
+            var devId = device.Id;
+            query = query.Where(t =>
+                t.DeviceId == devId ||
+                (t.RequesterEmail != null && t.RequesterEmail.ToLower() == emailNorm));
+        }
+        else if (device is not null)
+        {
+            query = query.Where(t => t.DeviceId == device.Id);
+        }
+        else
+        {
+            query = query.Where(t =>
+                t.RequesterEmail != null && t.RequesterEmail.ToLower() == emailNorm);
+        }
+
+        var list = await query
             .OrderByDescending(t => t.UpdatedAt)
             .Select(t => new PublicMyTicketItemDto(t.Id, t.Title, t.Status, t.CreatedAt, t.UpdatedAt))
             .ToListAsync();
@@ -164,14 +193,21 @@ public static class PublicAuthEndpoints
                 return Results.BadRequest(new { error = "Agente invalido ou nao pertence a este cliente." });
         }
 
-        Ticket? ticket;
+        if (device is null && (emailNorm.Length == 0 || !emailNorm.Contains('@', StringComparison.Ordinal)))
+            return Results.BadRequest(new
+            {
+                error = "Informe o codigo do agente (atalho VisoHelp) ou e-mail do solicitante."
+            });
+
+        Ticket? ticket = null;
         if (device is not null)
         {
             ticket = await db.Tickets.AsNoTracking()
                 .FirstOrDefaultAsync(t =>
                     t.Id == id && t.ClientId == client.Id && t.DeviceId == device.Id);
         }
-        else if (emailNorm.Length > 0 && emailNorm.Contains('@', StringComparison.Ordinal))
+
+        if (ticket is null && emailNorm.Length > 0 && emailNorm.Contains('@', StringComparison.Ordinal))
         {
             ticket = await db.Tickets.AsNoTracking()
                 .FirstOrDefaultAsync(t =>
@@ -180,11 +216,6 @@ public static class PublicAuthEndpoints
                     t.RequesterEmail != null &&
                     t.RequesterEmail.ToLower() == emailNorm);
         }
-        else
-            return Results.BadRequest(new
-            {
-                error = "Informe o codigo do agente (atalho VisoHelp) ou e-mail do solicitante."
-            });
 
         if (ticket is null)
             return Results.NotFound();
@@ -240,13 +271,20 @@ public static class PublicAuthEndpoints
                 return Results.BadRequest(new { error = "Agente invalido ou nao pertence a este cliente." });
         }
 
-        Ticket? ticket;
+        if (device is null && (emailNorm.Length == 0 || !emailNorm.Contains('@', StringComparison.Ordinal)))
+            return Results.BadRequest(new
+            {
+                error = "Informe o codigo do agente (atalho VisoHelp) ou e-mail do solicitante."
+            });
+
+        Ticket? ticket = null;
         if (device is not null)
         {
             ticket = await db.Tickets.FirstOrDefaultAsync(t =>
                 t.Id == id && t.ClientId == client.Id && t.DeviceId == device.Id);
         }
-        else if (emailNorm.Length > 0 && emailNorm.Contains('@', StringComparison.Ordinal))
+
+        if (ticket is null && emailNorm.Length > 0 && emailNorm.Contains('@', StringComparison.Ordinal))
         {
             ticket = await db.Tickets.FirstOrDefaultAsync(t =>
                 t.Id == id &&
@@ -254,11 +292,6 @@ public static class PublicAuthEndpoints
                 t.RequesterEmail != null &&
                 t.RequesterEmail.ToLower() == emailNorm);
         }
-        else
-            return Results.BadRequest(new
-            {
-                error = "Informe o codigo do agente (atalho VisoHelp) ou e-mail do solicitante."
-            });
 
         if (ticket is null)
             return Results.NotFound();

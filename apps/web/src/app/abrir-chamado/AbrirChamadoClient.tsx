@@ -41,6 +41,10 @@ type PublicTicketDetail = {
   comments: PublicTicketComment[];
 };
 
+function storageEmailKey(publicCode: string) {
+  return `visohelp_public_email_${publicCode.trim().toUpperCase()}`;
+}
+
 export function AbrirChamadoClient() {
   const searchParams = useSearchParams();
   const keyFromUrl = searchParams.get("key")?.trim() ?? "";
@@ -62,6 +66,7 @@ export function AbrirChamadoClient() {
   const [requesterDepartment, setRequesterDepartment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const [trackerEmail, setTrackerEmail] = useState("");
   const [myTickets, setMyTickets] = useState<PublicMyTicketItem[] | null>(null);
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -115,13 +120,27 @@ export function AbrirChamadoClient() {
     if (tabFromUrl === "novo") setTab("novo");
   }, [tabFromUrl]);
 
+  useEffect(() => {
+    const code = publicCode.trim().toUpperCase();
+    if (code.length < 3) return;
+    try {
+      const saved = sessionStorage.getItem(storageEmailKey(code));
+      if (saved) setTrackerEmail(saved);
+    } catch {
+      /* ignore */
+    }
+  }, [publicCode]);
+
   const agentKey = agentKeyFromUrl.trim();
 
   const fetchMyTickets = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
-    if (!code || !agentKey) {
+    const email = trackerEmail.trim();
+    if (!code) return;
+    if (!agentKey && (!email || !email.includes("@"))) {
       showToast({
-        title: "Codigo do agente ausente. Abra pelo atalho VisoHelp.",
+        title:
+          "Informe o e-mail usado ao abrir chamados ou abra pelo atalho VisoHelp (agente).",
         variant: "error",
       });
       return;
@@ -130,8 +149,11 @@ export function AbrirChamadoClient() {
     setMyTickets(null);
     try {
       const api = getApiBase();
+      const params = new URLSearchParams({ code });
+      if (agentKey) params.set("agentKey", agentKey);
+      if (email) params.set("email", email);
       const res = await fetch(
-        `${api}/api/v1/public/my-tickets?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(agentKey)}`,
+        `${api}/api/v1/public/my-tickets?${params.toString()}`,
         { method: "GET", cache: "no-store" }
       );
       const json = await res.json().catch(() => ({}));
@@ -144,23 +166,33 @@ export function AbrirChamadoClient() {
         return;
       }
       setMyTickets(json as PublicMyTicketItem[]);
+      try {
+        if (email) sessionStorage.setItem(storageEmailKey(code), email);
+      } catch {
+        /* ignore */
+      }
     } catch {
       showToast({ title: "Falha de rede. Tente novamente.", variant: "error" });
     } finally {
       setMyTicketsLoading(false);
     }
-  }, [publicCode, agentKey]);
+  }, [publicCode, agentKey, trackerEmail]);
 
   const fetchDetail = useCallback(
     async (ticketId: string) => {
       const code = publicCode.trim().toUpperCase();
-      if (!code || !agentKey) return;
+      const email = trackerEmail.trim();
+      if (!code) return;
+      if (!agentKey && (!email || !email.includes("@"))) return;
       setDetailLoading(true);
       setDetail(null);
       try {
         const api = getApiBase();
+        const params = new URLSearchParams({ code });
+        if (agentKey) params.set("agentKey", agentKey);
+        if (email) params.set("email", email);
         const res = await fetch(
-          `${api}/api/v1/public/tickets/${ticketId}?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(agentKey)}`,
+          `${api}/api/v1/public/tickets/${ticketId}?${params.toString()}`,
           { method: "GET", cache: "no-store" }
         );
         if (res.status === 404) {
@@ -184,7 +216,7 @@ export function AbrirChamadoClient() {
         setDetailLoading(false);
       }
     },
-    [publicCode, agentKey]
+    [publicCode, agentKey, trackerEmail]
   );
 
   useEffect(() => {
@@ -197,17 +229,24 @@ export function AbrirChamadoClient() {
   }, [selectedTicketId, fetchDetail]);
 
   useEffect(() => {
-    if (tab !== "meus" || !agentKey || !clientInfo || selectedTicketId) return;
+    if (tab !== "meus" || !clientInfo || selectedTicketId) return;
+    if (!agentKey && (!trackerEmail.trim() || !trackerEmail.includes("@")))
+      return;
     void fetchMyTickets();
-  }, [tab, agentKey, clientInfo, selectedTicketId, fetchMyTickets]);
+  }, [tab, agentKey, clientInfo, selectedTicketId, trackerEmail, fetchMyTickets]);
 
   const refreshMyTicketsSilent = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
-    if (!code || !agentKey) return;
+    const email = trackerEmail.trim();
+    if (!code) return;
+    if (!agentKey && (!email || !email.includes("@"))) return;
     try {
       const api = getApiBase();
+      const params = new URLSearchParams({ code });
+      if (agentKey) params.set("agentKey", agentKey);
+      if (email) params.set("email", email);
       const res = await fetch(
-        `${api}/api/v1/public/my-tickets?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(agentKey)}`,
+        `${api}/api/v1/public/my-tickets?${params.toString()}`,
         { method: "GET", cache: "no-store" }
       );
       if (!res.ok) return;
@@ -216,7 +255,7 @@ export function AbrirChamadoClient() {
     } catch {
       /* ignore */
     }
-  }, [publicCode, agentKey]);
+  }, [publicCode, agentKey, trackerEmail]);
 
   async function sendReply(e: React.FormEvent) {
     e.preventDefault();
@@ -228,9 +267,11 @@ export function AbrirChamadoClient() {
       return;
     }
     const code = publicCode.trim().toUpperCase();
-    if (!agentKey) {
+    const email = trackerEmail.trim();
+    if (!agentKey && (!email || !email.includes("@"))) {
       showToast({
-        title: "Codigo do agente ausente. Abra pelo atalho VisoHelp.",
+        title:
+          "Informe o e-mail do solicitante (aba Meus chamados) ou use o atalho VisoHelp.",
         variant: "error",
       });
       return;
@@ -246,8 +287,8 @@ export function AbrirChamadoClient() {
           body: JSON.stringify({
             publicCode: code,
             body: text,
-            agentKey,
-            requesterEmail: null,
+            agentKey: agentKey || null,
+            requesterEmail: email || null,
           }),
         }
       );
@@ -327,6 +368,13 @@ export function AbrirChamadoClient() {
       showToast({ title: "Chamado registrado com sucesso.", variant: "success" });
       setTitle("");
       setMessage("");
+      try {
+        sessionStorage.setItem(storageEmailKey(code), requesterEmail.trim());
+      } catch {
+        /* ignore */
+      }
+      setTrackerEmail(requesterEmail.trim());
+      setTab("meus");
     } catch {
       showToast({ title: "Falha de rede. Tente novamente.", variant: "error" });
     } finally {
@@ -499,19 +547,12 @@ export function AbrirChamadoClient() {
               <p className="font-medium text-primary">{clientInfo.name}</p>
             </div>
           )}
-          {!agentKey && (
-            <p className="text-sm text-muted">
-              Para listar os chamados abertos neste computador, abra esta pagina pelo
-              atalho <strong>VisoHelp Abrir chamado</strong> no ambiente de trabalho (a
-              URL inclui o codigo do agente).
-            </p>
-          )}
-          {agentKey && (
-            <p className="text-sm text-muted">
-              Chamados abertos por este equipamento (qualquer solicitante), vinculados
-              ao agente instalado.
-            </p>
-          )}
+          <p className="text-sm text-muted">
+            Informe o <strong>mesmo e-mail</strong> usado em &quot;Novo chamado&quot; para
+            ver e responder chamados. Se abrir pelo atalho{" "}
+            <strong>VisoHelp Abrir chamado</strong>, a lista inclui tambem chamados
+            vinculados a este PC (e o e-mail reforca chamados abertos so no navegador).
+          </p>
           {!selectedTicketId && (
             <>
               {loadingClient && (
@@ -522,12 +563,30 @@ export function AbrirChamadoClient() {
                   Codigo do cliente invalido ou API indisponivel.
                 </p>
               )}
-              {agentKey && clientInfo && (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {clientInfo && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                      E-mail (solicitante)
+                    </label>
+                    <input
+                      type="email"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                      value={trackerEmail}
+                      onChange={(e) => setTrackerEmail(e.target.value)}
+                      maxLength={200}
+                      autoComplete="email"
+                      placeholder="O mesmo e-mail do formulario de novo chamado"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => void fetchMyTickets()}
-                    disabled={myTicketsLoading}
+                    disabled={
+                      myTicketsLoading ||
+                      (!agentKey &&
+                        (!trackerEmail.trim() || !trackerEmail.includes("@")))
+                    }
                     className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {myTicketsLoading ? "Atualizando..." : "Atualizar lista"}
