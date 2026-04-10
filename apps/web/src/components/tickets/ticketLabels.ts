@@ -65,3 +65,8 @@ export function isTerminalStatus(status: string): boolean {
   const s = status.trim().toLowerCase();
   return s === "resolved" || s === "closed";
 }
+
+/** Primeiros 8 caracteres do GUID, para exibir como numero do chamado. */
+export function shortTicketId(id: string): string {
+  return id.slice(0, 8).toUpperCase();
+}

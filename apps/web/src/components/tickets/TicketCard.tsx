@@ -6,11 +6,7 @@ import type {
 } from "@dnd-kit/core";
 import type { CSSProperties } from "react";
 import type { TicketRow } from "./ticketLabels";
-import { priorityLabel, statusLabel } from "./ticketLabels";
-
-function shortId(id: string) {
-  return id.slice(0, 8).toUpperCase();
-}
+import { priorityLabel, shortTicketId, statusLabel } from "./ticketLabels";
 
 function priorityClass(p: string) {
   if (p === "high" || p === "critical")
@@ -44,7 +40,7 @@ function CardInner({ ticket }: { ticket: TicketRow }) {
 
   return (
     <>
-      <p className="font-mono text-[11px] text-muted">#{shortId(ticket.id)}</p>
+        <p className="font-mono text-[11px] text-muted">#{shortTicketId(ticket.id)}</p>
       <p className="mt-1 line-clamp-2 font-medium leading-snug">{ticket.title}</p>
       {ticket.clientName ? (
         <p className="mt-1 truncate text-[11px] text-muted">{ticket.clientName}</p>

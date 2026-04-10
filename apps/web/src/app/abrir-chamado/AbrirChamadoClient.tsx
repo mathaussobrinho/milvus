@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { isTerminalStatus } from "@/components/tickets/ticketLabels";
+import {
+  isTerminalStatus,
+  priorityLabel,
+  shortTicketId,
+  statusLabel,
+} from "@/components/tickets/ticketLabels";
 import { getApiBase } from "@/lib/api-base";
 import { showToast } from "@/lib/toast";
 
@@ -527,27 +532,50 @@ export function AbrirChamadoClient() {
                 </p>
               )}
               {myTickets && myTickets.length > 0 && (
-                <ul className="space-y-2">
-                  {myTickets.map((t) => (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTicketId(t.id)}
-                        className="w-full rounded-lg border border-border bg-surface px-3 py-3 text-left text-sm transition hover:border-primary"
-                      >
-                        <div className="font-medium text-foreground">
-                          {t.title}
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
-                          <span>{t.status}</span>
-                          <span>
-                            {new Date(t.updatedAt).toLocaleString("pt-BR")}
-                          </span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+                  <table className="w-full min-w-[320px] text-left text-sm">
+                    <thead className="border-b border-border bg-background text-xs uppercase text-muted">
+                      <tr>
+                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                          Nº chamado
+                        </th>
+                        <th className="min-w-[140px] px-3 py-2 font-medium">
+                          Assunto
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {myTickets.map((t) => (
+                        <tr
+                          key={t.id}
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-pointer hover:bg-background/80"
+                          onClick={() => setSelectedTicketId(t.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedTicketId(t.id);
+                            }
+                          }}
+                        >
+                          <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted">
+                            #{shortTicketId(t.id)}
+                          </td>
+                          <td className="px-3 py-2.5 font-medium text-foreground">
+                            {t.title}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-foreground">
+                            {statusLabel[t.status] ?? t.status}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           )}
@@ -577,11 +605,15 @@ export function AbrirChamadoClient() {
               {detail && !detailLoading && (
                 <>
                   <div className="rounded-lg border border-border bg-surface px-3 py-3 text-sm">
-                    <h2 className="text-base font-semibold text-foreground">
+                    <p className="font-mono text-xs text-muted">
+                      Chamado #{shortTicketId(detail.id)}
+                    </p>
+                    <h2 className="mt-1 text-base font-semibold text-foreground">
                       {detail.title}
                     </h2>
                     <p className="mt-2 text-xs text-muted">
-                      {detail.status} · {detail.priority}
+                      {statusLabel[detail.status] ?? detail.status} ·{" "}
+                      {priorityLabel[detail.priority] ?? detail.priority}
                     </p>
                     {detail.clientProvidedDescription && (
                       <p className="mt-3 whitespace-pre-wrap text-foreground">
