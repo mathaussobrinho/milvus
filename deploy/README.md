@@ -93,6 +93,32 @@ O mesmo script gera ou copia `Desinstalar-VisoHelp-Agent.cmd` para `release\` e 
 
 Assim a página **Configurações > Agente** serve os ficheiros estáticos (pacote e desinstalador).
 
+## 8. Deploy com Git na VPS (recomendado)
+
+Na VPS, clone o repositório (uma vez) e copie o `.env` da instalação antiga:
+
+```bash
+git clone https://github.com/mathaussobrinho/milvus.git /root/visohelp-git
+cp /root/visohelp/.env /root/visohelp-git/.env
+```
+
+Opcional: copie `apps/web/public/downloads/VisoHelp.Agent.zip` para a pasta `public/downloads` do clone se o download do painel depender desse ficheiro.
+
+Pare a stack antiga e suba a partir do clone:
+
+```bash
+cd /root/visohelp && docker compose down
+cd /root/visohelp-git && bash deploy/migrate-vps.sh && docker compose build && docker compose up -d
+```
+
+Atualizações seguintes:
+
+```bash
+cd /root/visohelp-git && bash deploy/vps-update.sh
+```
+
+Ou manualmente: `git pull`, `deploy/migrate-vps.sh`, `docker compose build`, `docker compose up -d`.
+
 ## Resolução de problemas
 
 - **SSL no agente Windows**: erro ao validar KEY → corrigir certificado/cadeia no proxy (fullchain).
