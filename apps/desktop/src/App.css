@@ -1,0 +1,78 @@
+.desktop-shell {
+  min-height: 100vh;
+  background: #f5f7fb;
+  color: #0f131a;
+  padding: 2rem;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.eyebrow {
+  color: #0048ff;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.cards {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px solid #dfe3eb;
+  background: #fff;
+}
+
+.card strong {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.card.primary {
+  border-color: #b8caff;
+  color: #0038cc;
+}
+
+.card.danger {
+  border-color: #ffc8d2;
+  color: #b00022;
+}
+
+.card.neutral {
+  border-color: #dfe3eb;
+  color: #0f131a;
+}
+
+.api-error {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: #b00022;
+  max-width: 40rem;
+}
+
+.api-hint {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: #5e6470;
+}
+
+.api-hint code {
+  background: #eef1f6;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.api-hint a {
+  color: #0048ff;
+}

@@ -1,0 +1,21 @@
+# Node
+node_modules/
+dist/
+.next/
+.expo/
+coverage/
+
+# .NET
+bin/
+obj/
+
+# IDE and OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
+.env.*.local
