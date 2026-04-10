@@ -179,10 +179,19 @@ export function TicketsKanban({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       });
-      if (!res.ok) throw new Error("patch failed");
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        showToast({
+          title: j?.error ?? "Nao foi possivel alterar o status.",
+          variant: "error",
+        });
+        onTicketsChange(prev);
+        return;
+      }
       router.refresh();
     } catch {
       onTicketsChange(prev);
+      showToast({ title: "Falha de rede.", variant: "error" });
     }
   }
 

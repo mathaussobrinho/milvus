@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using VisoHelp.Api.Contracts;
 using VisoHelp.Api.Data;
 using VisoHelp.Api.Domain;
+using VisoHelp.Api.Services;
 
 namespace VisoHelp.Api.Endpoints;
 
@@ -253,20 +254,7 @@ public static class V1Endpoints
             if (ticket is null)
                 return Results.NotFound();
 
-            if (!string.IsNullOrWhiteSpace(body.Status))
-            {
-                var s = body.Status.Trim().ToLowerInvariant();
-                var allowed = new[] { "open", "in_progress", "waiting", "resolved", "closed" };
-                if (allowed.Contains(s))
-                {
-                    if (TicketStatuses.IsTerminal(ticket.Status) && !TicketStatuses.IsTerminal(s))
-                        return Results.BadRequest(new
-                        {
-                            error = "Chamado encerrado nao pode ser reaberto."
-                        });
-                    ticket.Status = s;
-                }
-            }
+            var previousStatus = ticket.Status;
 
             if (!string.IsNullOrWhiteSpace(body.Title))
                 ticket.Title = body.Title.Trim();
@@ -309,6 +297,29 @@ public static class V1Endpoints
                     if (!analystOk)
                         return Results.BadRequest(new { error = "Analista invalido." });
                     ticket.AssigneeAnalystId = body.AssigneeAnalystId;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(body.Status))
+            {
+                var s = body.Status.Trim().ToLowerInvariant();
+                var allowed = new[] { "open", "in_progress", "waiting", "resolved", "closed" };
+                if (allowed.Contains(s))
+                {
+                    if (TicketStatuses.IsTerminal(previousStatus) && !TicketStatuses.IsTerminal(s))
+                        return Results.BadRequest(new
+                        {
+                            error = "Chamado encerrado nao pode ser reaberto."
+                        });
+
+                    if (TicketStatuses.IsTerminal(s) && !TicketStatuses.IsTerminal(previousStatus))
+                    {
+                        var block = await TicketCloseValidation.GetBlockingReasonAsync(ticket, db);
+                        if (block is not null)
+                            return Results.BadRequest(new { error = block });
+                    }
+
+                    ticket.Status = s;
                 }
             }
 
