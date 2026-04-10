@@ -4,7 +4,7 @@ import { AbrirChamadoClient } from "./AbrirChamadoClient";
 
 export default function AbrirChamadoPage() {
   return (
-    <div className="min-h-full bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-4">
         <span className="w-24 shrink-0" aria-hidden />
         <p className="flex-1 text-center text-sm font-semibold text-primary">

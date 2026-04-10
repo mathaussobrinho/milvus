@@ -8,8 +8,8 @@ export default function ConfiguracoesLayout({
   return (
     <>
       <AppHeader
-        title="Configuracoes"
-        subtitle="Preferencias, integracoes e automacoes."
+        title="Configurações"
+        subtitle="Preferências, integrações e automações."
       />
       <div className="flex-1">{children}</div>
     </>

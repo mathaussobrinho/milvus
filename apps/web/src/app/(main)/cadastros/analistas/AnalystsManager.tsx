@@ -255,8 +255,8 @@ export function AnalystsManager({ initial }: Props) {
               <th className="px-4 py-3 font-medium">Nome</th>
               <th className="px-4 py-3 font-medium">E-mail</th>
               <th className="px-4 py-3 font-medium">Atualizado</th>
-              <th className="px-4 py-3 font-medium">Ultimo login</th>
-              <th className="px-4 py-3 font-medium">Acoes</th>
+              <th className="px-4 py-3 font-medium">Último login</th>
+              <th className="px-4 py-3 font-medium">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -308,7 +308,7 @@ export function AnalystsManager({ initial }: Props) {
                     {new Date(r.updatedAt).toLocaleString("pt-BR")}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-foreground">
+                    <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted">
                       {formatLogin(r.lastLoginAt)}
                     </span>
                   </td>

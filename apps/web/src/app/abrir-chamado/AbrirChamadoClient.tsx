@@ -45,6 +45,35 @@ function storageEmailKey(publicCode: string) {
   return `visohelp_public_email_${publicCode.trim().toUpperCase()}`;
 }
 
+function storageProfileKey(publicCode: string) {
+  return `visohelp_public_profile_${publicCode.trim().toUpperCase()}`;
+}
+
+type SavedRequesterProfile = {
+  name: string;
+  email: string;
+  phone: string;
+  department: string;
+};
+
+function parseStoredProfile(raw: string | null): SavedRequesterProfile | null {
+  if (!raw) return null;
+  try {
+    const j = JSON.parse(raw) as Partial<SavedRequesterProfile>;
+    const email = typeof j.email === "string" ? j.email.trim() : "";
+    const name = typeof j.name === "string" ? j.name.trim() : "";
+    if (!name || !email || !email.includes("@")) return null;
+    return {
+      name,
+      email,
+      phone: typeof j.phone === "string" ? j.phone.trim() : "",
+      department: typeof j.department === "string" ? j.department.trim() : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function AbrirChamadoClient() {
   const searchParams = useSearchParams();
   const keyFromUrl = searchParams.get("key")?.trim() ?? "";
@@ -65,6 +94,10 @@ export function AbrirChamadoClient() {
   const [requesterPhone, setRequesterPhone] = useState("");
   const [requesterDepartment, setRequesterDepartment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [savedProfile, setSavedProfile] = useState<SavedRequesterProfile | null>(
+    null
+  );
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const [trackerEmail, setTrackerEmail] = useState("");
   const [myTickets, setMyTickets] = useState<PublicMyTicketItem[] | null>(null);
@@ -123,15 +156,40 @@ export function AbrirChamadoClient() {
   useEffect(() => {
     const code = publicCode.trim().toUpperCase();
     if (code.length < 3) return;
+    let profile: SavedRequesterProfile | null = null;
     try {
-      const saved = sessionStorage.getItem(storageEmailKey(code));
-      if (saved) setTrackerEmail(saved);
+      profile = parseStoredProfile(localStorage.getItem(storageProfileKey(code)));
+    } catch {
+      /* ignore */
+    }
+    if (profile) {
+      setSavedProfile(profile);
+      setRequesterName(profile.name);
+      setRequesterEmail(profile.email);
+      setRequesterPhone(profile.phone);
+      setRequesterDepartment(profile.department);
+      setTrackerEmail(profile.email);
+      setEditingProfile(false);
+      try {
+        sessionStorage.setItem(storageEmailKey(code), profile.email);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    setSavedProfile(null);
+    setEditingProfile(false);
+    try {
+      const emailOnly = sessionStorage.getItem(storageEmailKey(code));
+      if (emailOnly) setTrackerEmail(emailOnly);
     } catch {
       /* ignore */
     }
   }, [publicCode]);
 
   const agentKey = agentKeyFromUrl.trim();
+  const compactProfile =
+    Boolean(savedProfile) && !editingProfile && tab === "novo";
 
   const fetchMyTickets = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
@@ -140,7 +198,7 @@ export function AbrirChamadoClient() {
     if (!agentKey && (!email || !email.includes("@"))) {
       showToast({
         title:
-          "Informe o e-mail usado ao abrir chamados ou abra pelo atalho VisoHelp (agente).",
+          "Abra pelo atalho VisoHelp neste PC ou informe o e-mail do solicitante (aba Novo chamado).",
         variant: "error",
       });
       return;
@@ -271,7 +329,7 @@ export function AbrirChamadoClient() {
     if (!agentKey && (!email || !email.includes("@"))) {
       showToast({
         title:
-          "Informe o e-mail do solicitante (aba Meus chamados) ou use o atalho VisoHelp.",
+          "Use o atalho VisoHelp neste PC ou confira o e-mail em Novo chamado / Meus chamados.",
         variant: "error",
       });
       return;
@@ -312,6 +370,44 @@ export function AbrirChamadoClient() {
     }
   }
 
+  function persistProfile(code: string, p: SavedRequesterProfile) {
+    try {
+      localStorage.setItem(storageProfileKey(code), JSON.stringify(p));
+    } catch {
+      /* ignore */
+    }
+    setSavedProfile(p);
+    setRequesterName(p.name);
+    setRequesterEmail(p.email);
+    setRequesterPhone(p.phone);
+    setRequesterDepartment(p.department);
+    setTrackerEmail(p.email);
+    try {
+      sessionStorage.setItem(storageEmailKey(code), p.email);
+    } catch {
+      /* ignore */
+    }
+    setEditingProfile(false);
+  }
+
+  function clearSavedProfile() {
+    const code = publicCode.trim().toUpperCase();
+    if (code.length < 3) return;
+    try {
+      localStorage.removeItem(storageProfileKey(code));
+      sessionStorage.removeItem(storageEmailKey(code));
+    } catch {
+      /* ignore */
+    }
+    setSavedProfile(null);
+    setEditingProfile(false);
+    setRequesterName("");
+    setRequesterEmail("");
+    setRequesterPhone("");
+    setRequesterDepartment("");
+    setTrackerEmail("");
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const code = publicCode.trim().toUpperCase();
@@ -319,16 +415,27 @@ export function AbrirChamadoClient() {
       showToast({ title: "Preencha o titulo.", variant: "error" });
       return;
     }
-    if (!requesterName.trim() || !requesterEmail.trim()) {
-      showToast({
-        title: "Preencha nome e e-mail do solicitante.",
-        variant: "error",
-      });
-      return;
-    }
-    if (!requesterEmail.includes("@")) {
-      showToast({ title: "E-mail invalido.", variant: "error" });
-      return;
+    const useCompact = Boolean(savedProfile && !editingProfile);
+    const prof: SavedRequesterProfile = useCompact
+      ? savedProfile!
+      : {
+          name: requesterName.trim(),
+          email: requesterEmail.trim(),
+          phone: requesterPhone.trim(),
+          department: requesterDepartment.trim(),
+        };
+    if (!useCompact) {
+      if (!prof.name || !prof.email) {
+        showToast({
+          title: "Preencha nome e e-mail do solicitante.",
+          variant: "error",
+        });
+        return;
+      }
+      if (!prof.email.includes("@")) {
+        showToast({ title: "E-mail invalido.", variant: "error" });
+        return;
+      }
     }
     if (!message.trim()) {
       showToast({
@@ -344,10 +451,10 @@ export function AbrirChamadoClient() {
         publicCode: code,
         title: title.trim(),
         clientMessage: message.trim(),
-        requesterName: requesterName.trim(),
-        requesterEmail: requesterEmail.trim(),
-        requesterPhone: requesterPhone.trim() || null,
-        requesterDepartment: requesterDepartment.trim() || null,
+        requesterName: prof.name,
+        requesterEmail: prof.email,
+        requesterPhone: prof.phone || null,
+        requesterDepartment: prof.department || null,
       };
       if (agentKeyFromUrl) body.agentKey = agentKeyFromUrl;
 
@@ -368,12 +475,7 @@ export function AbrirChamadoClient() {
       showToast({ title: "Chamado registrado com sucesso.", variant: "success" });
       setTitle("");
       setMessage("");
-      try {
-        sessionStorage.setItem(storageEmailKey(code), requesterEmail.trim());
-      } catch {
-        /* ignore */
-      }
-      setTrackerEmail(requesterEmail.trim());
+      persistProfile(code, prof);
       setTab("meus");
     } catch {
       showToast({ title: "Falha de rede. Tente novamente.", variant: "error" });
@@ -407,8 +509,10 @@ export function AbrirChamadoClient() {
         Abrir chamado
       </h1>
       <p className="mb-4 text-sm text-muted">
-        Cliente identificado pelo ambiente. Preencha seus dados e o problema. Nao e
-        necessario login.
+        Cliente identificado pelo ambiente.{" "}
+        {savedProfile
+          ? "Seus dados estao salvos neste navegador; basta titulo e mensagem para novos chamados."
+          : "Preencha seus dados e o problema. Nao e necessario login."}
       </p>
 
       <div className="mb-6 flex gap-2 rounded-lg border border-border bg-surface p-1">
@@ -452,57 +556,117 @@ export function AbrirChamadoClient() {
               <p className="font-medium text-primary">{clientInfo.name}</p>
             </div>
           )}
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-muted">
-              Nome completo
-            </label>
-            <input
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-              value={requesterName}
-              onChange={(e) => setRequesterName(e.target.value)}
-              required
-              maxLength={200}
-              autoComplete="name"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-muted">
-              E-mail
-            </label>
-            <input
-              type="email"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-              value={requesterEmail}
-              onChange={(e) => setRequesterEmail(e.target.value)}
-              required
-              maxLength={200}
-              autoComplete="email"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-muted">
-              Telefone
-            </label>
-            <input
-              type="tel"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-              value={requesterPhone}
-              onChange={(e) => setRequesterPhone(e.target.value)}
-              maxLength={50}
-              autoComplete="tel"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-muted">
-              Departamento
-            </label>
-            <input
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-              value={requesterDepartment}
-              onChange={(e) => setRequesterDepartment(e.target.value)}
-              maxLength={120}
-            />
-          </div>
+          {savedProfile && compactProfile && (
+            <div className="rounded-lg border border-border bg-background/80 px-3 py-3 text-sm">
+              <p className="text-xs uppercase text-muted">Solicitante (salvo)</p>
+              <p className="mt-1 font-medium text-foreground">{savedProfile.name}</p>
+              <p className="text-xs text-muted">{savedProfile.email}</p>
+              {(savedProfile.phone || savedProfile.department) && (
+                <p className="mt-1 text-xs text-muted">
+                  {[savedProfile.phone, savedProfile.department]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingProfile(true)}
+                  className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-background"
+                >
+                  Editar dados
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      typeof window !== "undefined" &&
+                      window.confirm(
+                        "Remover dados salvos neste navegador? Voce precisara preencher tudo de novo."
+                      )
+                    ) {
+                      clearSavedProfile();
+                    }
+                  }}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted hover:bg-background"
+                >
+                  Limpar dados salvos
+                </button>
+              </div>
+            </div>
+          )}
+          {(!savedProfile || editingProfile || !compactProfile) && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                  Nome completo
+                </label>
+                <input
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                  value={requesterName}
+                  onChange={(e) => setRequesterName(e.target.value)}
+                  required={!savedProfile || editingProfile}
+                  maxLength={200}
+                  autoComplete="name"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                  E-mail
+                </label>
+                <input
+                  type="email"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                  value={requesterEmail}
+                  onChange={(e) => setRequesterEmail(e.target.value)}
+                  required={!savedProfile || editingProfile}
+                  maxLength={200}
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                  Telefone
+                </label>
+                <input
+                  type="tel"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                  value={requesterPhone}
+                  onChange={(e) => setRequesterPhone(e.target.value)}
+                  maxLength={50}
+                  autoComplete="tel"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                  Departamento
+                </label>
+                <input
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                  value={requesterDepartment}
+                  onChange={(e) => setRequesterDepartment(e.target.value)}
+                  maxLength={120}
+                />
+              </div>
+              {editingProfile && savedProfile ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProfile(false);
+                      setRequesterName(savedProfile.name);
+                      setRequesterEmail(savedProfile.email);
+                      setRequesterPhone(savedProfile.phone);
+                      setRequesterDepartment(savedProfile.department);
+                    }}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Cancelar edicao
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium uppercase text-muted">
               Titulo
@@ -548,10 +712,23 @@ export function AbrirChamadoClient() {
             </div>
           )}
           <p className="text-sm text-muted">
-            Informe o <strong>mesmo e-mail</strong> usado em &quot;Novo chamado&quot; para
-            ver e responder chamados. Se abrir pelo atalho{" "}
-            <strong>VisoHelp Abrir chamado</strong>, a lista inclui tambem chamados
-            vinculados a este PC (e o e-mail reforca chamados abertos so no navegador).
+            {agentKey ? (
+              <>
+                Chamados abertos neste computador (atalho VisoHelp). Use{" "}
+                <strong>Atualizar lista</strong> para recarregar.
+              </>
+            ) : savedProfile || trackerEmail.trim().includes("@") ? (
+              <>
+                Lista pelos chamados associados ao seu e-mail neste navegador. Se
+                faltar algo, confira o e-mail abaixo.
+              </>
+            ) : (
+              <>
+                Informe o <strong>e-mail</strong> usado em &quot;Novo chamado&quot; ou abra
+                pelo atalho <strong>VisoHelp</strong> neste PC para listar sem digitar
+                e-mail.
+              </>
+            )}
           </p>
           {!selectedTicketId && (
             <>
@@ -565,20 +742,22 @@ export function AbrirChamadoClient() {
               )}
               {clientInfo && (
                 <div className="space-y-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium uppercase text-muted">
-                      E-mail (solicitante)
-                    </label>
-                    <input
-                      type="email"
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-                      value={trackerEmail}
-                      onChange={(e) => setTrackerEmail(e.target.value)}
-                      maxLength={200}
-                      autoComplete="email"
-                      placeholder="O mesmo e-mail do formulario de novo chamado"
-                    />
-                  </div>
+                  {!agentKey && (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                        E-mail (solicitante)
+                      </label>
+                      <input
+                        type="email"
+                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                        value={trackerEmail}
+                        onChange={(e) => setTrackerEmail(e.target.value)}
+                        maxLength={200}
+                        autoComplete="email"
+                        placeholder="O mesmo e-mail do formulario de novo chamado"
+                      />
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => void fetchMyTickets()}
@@ -701,10 +880,10 @@ export function AbrirChamadoClient() {
                       {detail.comments.map((c) => (
                         <li
                           key={c.id}
-                          className={`rounded-md px-2 py-2 text-sm ${
+                          className={`rounded-md border px-2 py-2 text-sm ${
                             c.isFromClient
-                              ? "bg-primary/10 text-foreground"
-                              : "bg-muted/30 text-foreground"
+                              ? "border-primary/25 bg-primary/10 text-foreground"
+                              : "border-border bg-background text-foreground"
                           }`}
                         >
                           <div className="text-xs text-muted">
@@ -717,7 +896,7 @@ export function AbrirChamadoClient() {
                     </ul>
                   </div>
                   {isTerminalStatus(detail.status) ? (
-                    <p className="rounded-lg border border-border bg-muted/20 px-3 py-3 text-sm text-muted">
+                    <p className="rounded-lg border border-border bg-background/80 px-3 py-3 text-sm text-muted">
                       Este chamado esta encerrado (resolvido ou fechado) e nao aceita mais
                       mensagens nem pode ser reaberto por aqui.
                     </p>

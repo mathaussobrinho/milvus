@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/client-api";
 import { showToast } from "@/lib/toast";
 import { isTerminalStatus } from "./ticketLabels";
@@ -25,8 +25,15 @@ export function TicketStatusSelect({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  /** Valor exibido: so muda apos PATCH OK ou quando o servidor atualiza `current`. */
+  const [value, setValue] = useState(current);
+
+  useEffect(() => {
+    setValue(current);
+  }, [current]);
 
   async function onChange(next: string) {
+    if (next === value) return;
     if (isTerminalStatus(current) && !isTerminalStatus(next)) {
       showToast({
         title: "Chamado encerrado nao pode ser reaberto.",
@@ -49,6 +56,7 @@ export function TicketStatusSelect({
         });
         return;
       }
+      setValue(next);
       router.refresh();
     } finally {
       setPending(false);
@@ -57,11 +65,10 @@ export function TicketStatusSelect({
 
   return (
     <select
-      key={current}
       className="w-full max-w-[200px] rounded-lg border border-border bg-background px-2 py-1.5 text-sm disabled:opacity-50"
-      defaultValue={current}
+      value={value}
       disabled={pending}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => void onChange(e.target.value)}
       aria-label={`Status do ticket ${label}`}
     >
       {options.map((o) => (

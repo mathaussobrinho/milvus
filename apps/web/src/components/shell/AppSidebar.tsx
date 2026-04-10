@@ -136,7 +136,7 @@ export function AppSidebar() {
               }`}
               aria-expanded={configOpen}
             >
-              <span>Configuracoes</span>
+              <span>Configurações</span>
               <span className="text-xs text-muted" aria-hidden>
                 {configOpen ? "▾" : "▸"}
               </span>

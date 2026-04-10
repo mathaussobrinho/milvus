@@ -195,6 +195,7 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
         const message = j?.error ?? "Nao foi possivel salvar.";
         setSaveError(message);
         showToast({ title: "Erro ao salvar ticket", description: message, variant: "error" });
+        if (detail) setEditStatus(detail.status);
         return;
       }
       await load();
@@ -207,6 +208,7 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
     } catch {
       setSaveError("Falha de rede.");
       showToast({ title: "Erro ao salvar ticket", description: "Falha de rede.", variant: "error" });
+      if (detail) setEditStatus(detail.status);
     } finally {
       setSaving(false);
     }
