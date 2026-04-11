@@ -329,7 +329,7 @@ export function AbrirChamadoClient() {
     if (!agentKey && (!email || !email.includes("@"))) {
       showToast({
         title:
-          "Use o atalho VisoHelp neste PC ou confira o e-mail em Novo chamado / Meus chamados.",
+          "Use o atalho VisoHelp neste PC ou abra a aba Novo chamado para identificar o solicitante.",
         variant: "error",
       });
       return;
@@ -616,12 +616,18 @@ export function AbrirChamadoClient() {
                 </label>
                 <input
                   type="email"
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2 read-only:cursor-not-allowed read-only:bg-background/80 read-only:text-muted"
                   value={requesterEmail}
                   onChange={(e) => setRequesterEmail(e.target.value)}
+                  readOnly={Boolean(savedProfile)}
                   required={!savedProfile || editingProfile}
                   maxLength={200}
                   autoComplete="email"
+                  title={
+                    savedProfile
+                      ? "O e-mail nao pode ser alterado apos o primeiro chamado."
+                      : undefined
+                  }
                 />
               </div>
               <div>
@@ -719,14 +725,14 @@ export function AbrirChamadoClient() {
               </>
             ) : savedProfile || trackerEmail.trim().includes("@") ? (
               <>
-                Lista pelos chamados associados ao seu e-mail neste navegador. Se
-                faltar algo, confira o e-mail abaixo.
+                Chamados associados ao seu e-mail neste navegador (o mesmo do
+                primeiro registro).
               </>
             ) : (
               <>
-                Informe o <strong>e-mail</strong> usado em &quot;Novo chamado&quot; ou abra
-                pelo atalho <strong>VisoHelp</strong> neste PC para listar sem digitar
-                e-mail.
+                Abra um chamado em <strong>Novo chamado</strong> para registrar seus dados
+                neste navegador, ou use o atalho <strong>VisoHelp</strong> neste PC. Depois
+                disso, a lista aqui usa sempre o mesmo e-mail.
               </>
             )}
           </p>
@@ -740,38 +746,25 @@ export function AbrirChamadoClient() {
                   Codigo do cliente invalido ou API indisponivel.
                 </p>
               )}
-              {clientInfo && (
-                <div className="space-y-2">
-                  {!agentKey && (
-                    <div>
-                      <label className="mb-1 block text-xs font-medium uppercase text-muted">
-                        E-mail (solicitante)
-                      </label>
-                      <input
-                        type="email"
-                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
-                        value={trackerEmail}
-                        onChange={(e) => setTrackerEmail(e.target.value)}
-                        maxLength={200}
-                        autoComplete="email"
-                        placeholder="O mesmo e-mail do formulario de novo chamado"
-                      />
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void fetchMyTickets()}
-                    disabled={
-                      myTicketsLoading ||
-                      (!agentKey &&
-                        (!trackerEmail.trim() || !trackerEmail.includes("@")))
-                    }
-                    className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {myTicketsLoading ? "Atualizando..." : "Atualizar lista"}
-                  </button>
-                </div>
-              )}
+              {clientInfo &&
+                (agentKey ||
+                  savedProfile ||
+                  trackerEmail.trim().includes("@")) && (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => void fetchMyTickets()}
+                      disabled={
+                        myTicketsLoading ||
+                        (!agentKey &&
+                          (!trackerEmail.trim() || !trackerEmail.includes("@")))
+                      }
+                      className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {myTicketsLoading ? "Atualizando..." : "Atualizar lista"}
+                    </button>
+                  </div>
+                )}
               {myTickets && myTickets.length === 0 && !myTicketsLoading && (
                 <p className="text-sm text-muted">
                   Nenhum chamado desta maquina ainda.
