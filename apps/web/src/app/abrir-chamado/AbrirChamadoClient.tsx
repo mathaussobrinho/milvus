@@ -10,6 +10,7 @@ import {
 } from "@/components/tickets/ticketLabels";
 import { getApiBase } from "@/lib/api-base";
 import { showToast } from "@/lib/toast";
+import { clearVisoHelpPortalAgentBrowserData } from "@/lib/visohelp-portal-storage";
 
 type ClientInfo = { id: string; name: string; publicCode: string };
 
@@ -118,6 +119,7 @@ export function AbrirChamadoClient() {
   const keyFromUrl = searchParams.get("key")?.trim() ?? "";
   const agentKeyFromUrl = searchParams.get("agentKey")?.trim() ?? "";
   const resetFromUrl = searchParams.get("reset")?.trim().toLowerCase() ?? "";
+  const purgeFromUrl = searchParams.get("purge")?.trim().toLowerCase() ?? "";
   const tabFromUrl = searchParams.get("tab")?.toLowerCase();
 
   const [tab, setTab] = useState<"novo" | "meus">(
@@ -193,6 +195,31 @@ export function AbrirChamadoClient() {
     if (tabFromUrl === "meus") setTab("meus");
     if (tabFromUrl === "novo") setTab("novo");
   }, [tabFromUrl]);
+
+  /** ?purge=1 remove todos os visohelp_public_* (igual a /limpar-dados-portal). */
+  useEffect(() => {
+    if (purgeFromUrl !== "1" && purgeFromUrl !== "true") return;
+    try {
+      clearVisoHelpPortalAgentBrowserData();
+      setSavedProfile(null);
+      setFirstTicketDone(false);
+      setRequesterName("");
+      setRequesterEmail("");
+      setRequesterPhone("");
+      setRequesterDepartment("");
+      setRequesterRole("");
+      setTrackerEmail("");
+      setTitle("");
+      setMessage("");
+      if (typeof window !== "undefined") {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("purge");
+        router.replace(u.pathname + u.search + u.hash);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [purgeFromUrl, router]);
 
   /** ?reset=1 forca limpar dados do portal neste codigo (ex.: perfil antigo sem visohelp_public_agent_*). */
   useEffect(() => {
