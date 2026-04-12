@@ -169,16 +169,31 @@ internal static class HardwareInfo
 
     private static string? QueryCpuFromWmi()
     {
+        var rowCount = 0;
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Processor");
+            var scope = new ManagementScope(@"\\.\root\cimv2");
+            scope.Connect();
+            var query = new ObjectQuery("SELECT Name, Manufacturer FROM Win32_Processor");
+            using var searcher = new ManagementObjectSearcher(scope, query);
             foreach (ManagementObject o in searcher.Get())
             {
+                rowCount++;
                 try
                 {
                     var name = o["Name"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(name))
+                        name = o["Manufacturer"]?.ToString()?.Trim();
                     if (!string.IsNullOrEmpty(name))
+                    {
+                        // #region agent log
+                        DebugSessionLog.Append(
+                            "H3",
+                            "QueryCpuFromWmi:hit",
+                            new { rowCount, runId = "post-fix" });
+                        // #endregion
                         return name;
+                    }
                 }
                 finally
                 {
@@ -191,38 +206,62 @@ internal static class HardwareInfo
             /* ignore */
         }
 
+        // #region agent log
+        DebugSessionLog.Append("H3", "QueryCpuFromWmi:no_hit", new { rowCount });
+        // #endregion
         return null;
     }
 
     private static string? QueryCpuFromRegistry()
     {
-        try
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
         {
-            using var key = Registry.LocalMachine.OpenSubKey(
-                @"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
-            var v = key?.GetValue("ProcessorNameString") as string;
-            return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+                using var key = baseKey.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+                var v = key?.GetValue("ProcessorNameString") as string;
+                if (!string.IsNullOrWhiteSpace(v))
+                {
+                    // #region agent log
+                    DebugSessionLog.Append(
+                        "H3",
+                        "QueryCpuFromRegistry:hit",
+                        new { view = view.ToString(), runId = "post-fix" });
+                    // #endregion
+                    return v.Trim();
+                }
+            }
+            catch
+            {
+                /* ignore */
+            }
         }
-        catch
-        {
-            return null;
-        }
+
+        return null;
     }
 
     private static string? QueryGpuSummary()
     {
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT Name, VideoProcessor FROM Win32_VideoController");
+            var scope = new ManagementScope(@"\\.\root\cimv2");
+            scope.Connect();
+            var query = new ObjectQuery("SELECT Name, VideoProcessor, Description FROM Win32_VideoController");
+            using var searcher = new ManagementObjectSearcher(scope, query);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string? basicFallback = null;
+            var gpuRows = 0;
             foreach (ManagementObject o in searcher.Get())
             {
+                gpuRows++;
                 try
                 {
                     var name = o["Name"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(name))
                         name = o["VideoProcessor"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(name))
+                        name = o["Description"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(name))
                         continue;
                     if (name.Contains("Microsoft Basic Render Driver", StringComparison.OrdinalIgnoreCase) ||
@@ -241,7 +280,19 @@ internal static class HardwareInfo
             }
 
             if (names.Count > 0)
+            {
+                // #region agent log
+                DebugSessionLog.Append(
+                    "H3",
+                    "QueryGpuSummary:hit",
+                    new { gpuRows, count = names.Count, runId = "post-fix" });
+                // #endregion
                 return string.Join(" · ", names);
+            }
+
+            // #region agent log
+            DebugSessionLog.Append("H3", "QueryGpuSummary:fallback_only", new { gpuRows, hasBasic = basicFallback != null });
+            // #endregion
             return basicFallback;
         }
         catch
