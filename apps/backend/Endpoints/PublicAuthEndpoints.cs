@@ -17,6 +17,7 @@ public static class PublicAuthEndpoints
         pub.MapPost("/auth/forgot-password", ForgotPasswordAsync);
         pub.MapPost("/auth/reset-password", ResetPasswordAsync);
         pub.MapGet("/public/client-by-code", ClientByCodeAsync);
+        pub.MapGet("/public/requester-profile", PublicRequesterProfileAsync);
         pub.MapPost("/public/tickets", PublicCreateTicketAsync);
         pub.MapGet("/public/my-tickets", PublicMyTicketsAsync);
         pub.MapGet("/public/tickets/{id:guid}", PublicTicketDetailForClientAsync);
@@ -29,6 +30,54 @@ public static class PublicAuthEndpoints
 
     private static string NormalizeEmail(string? email) =>
         string.IsNullOrWhiteSpace(email) ? "" : email.Trim().ToLowerInvariant();
+
+    /// <summary>Compara MACs ignorando separadores e caixa.</summary>
+    private static string NormalizeMacForCompare(string? mac)
+    {
+        if (string.IsNullOrWhiteSpace(mac))
+            return "";
+        return new string(mac.Trim().Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+    }
+
+    private static async Task<IResult> PublicRequesterProfileAsync(
+        string? code,
+        string? agentKey,
+        VisoHelpDbContext db)
+    {
+        var normalized = NormalizePublicCode(code);
+        var key = agentKey?.Trim() ?? "";
+        if (normalized.Length == 0)
+            return Results.BadRequest(new { error = "Codigo obrigatorio." });
+        if (key.Length == 0)
+            return Results.BadRequest(new { error = "AgentKey obrigatorio." });
+
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == "default" && c.PublicCode == normalized);
+        if (client is null)
+            return Results.BadRequest(new { error = "Codigo invalido." });
+
+        var device = await db.Devices.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.AgentKey == key && d.ClientId == client.Id);
+        if (device is null)
+            return Results.BadRequest(new { error = "Agente invalido ou nao pertence a este cliente." });
+
+        var ticket = await db.Tickets.AsNoTracking()
+            .Where(t => t.ClientId == client.Id && t.DeviceId == device.Id)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (ticket is null ||
+            string.IsNullOrWhiteSpace(ticket.RequesterEmail) ||
+            string.IsNullOrWhiteSpace(ticket.RequesterName))
+            return Results.NotFound();
+
+        return Results.Ok(new PublicRequesterProfileDto(
+            ticket.RequesterName.Trim(),
+            ticket.RequesterEmail.Trim(),
+            string.IsNullOrWhiteSpace(ticket.RequesterPhone) ? null : ticket.RequesterPhone.Trim(),
+            string.IsNullOrWhiteSpace(ticket.RequesterDepartment) ? null : ticket.RequesterDepartment.Trim(),
+            string.IsNullOrWhiteSpace(ticket.RequesterRole) ? null : ticket.RequesterRole.Trim()));
+    }
 
     private static async Task<IResult> ClientByCodeAsync(string? code, VisoHelpDbContext db)
     {
@@ -78,6 +127,7 @@ public static class PublicAuthEndpoints
         var clientMsg = body.ClientMessage!.Trim();
         var phone = string.IsNullOrWhiteSpace(body.RequesterPhone) ? null : body.RequesterPhone.Trim();
         var dept = string.IsNullOrWhiteSpace(body.RequesterDepartment) ? null : body.RequesterDepartment.Trim();
+        var role = string.IsNullOrWhiteSpace(body.RequesterRole) ? null : body.RequesterRole.Trim();
         var now = DateTimeOffset.UtcNow;
         var ticket = new Ticket
         {
@@ -93,11 +143,22 @@ public static class PublicAuthEndpoints
             RequesterEmail = email,
             RequesterPhone = phone,
             RequesterDepartment = dept,
+            RequesterRole = role,
             AssigneeAnalystId = null,
             CreatedAt = now,
             UpdatedAt = now
         };
         db.Tickets.Add(ticket);
+        await UpsertClientEmployeeFromPortalAsync(
+            db,
+            client.Id,
+            client.TenantId,
+            name,
+            email,
+            phone,
+            dept,
+            role,
+            now);
         await db.SaveChangesAsync();
         return Results.Created($"/api/v1/tickets/{ticket.Id}", new { ticket.Id });
     }
@@ -324,6 +385,50 @@ public static class PublicAuthEndpoints
         return Results.Created($"/api/v1/public/tickets/{id}", new { comment.Id });
     }
 
+    private static async Task UpsertClientEmployeeFromPortalAsync(
+        VisoHelpDbContext db,
+        Guid clientId,
+        string tenantId,
+        string name,
+        string emailRaw,
+        string? phone,
+        string? department,
+        string? role,
+        DateTimeOffset now)
+    {
+        var emailLower = emailRaw.Trim().ToLowerInvariant();
+        var existing = await db.ClientEmployees
+            .FirstOrDefaultAsync(e =>
+                e.ClientId == clientId &&
+                e.TenantId == tenantId &&
+                e.Email != null &&
+                e.Email.Trim().ToLower() == emailLower);
+
+        if (existing is not null)
+        {
+            existing.Name = name.Trim();
+            existing.Phone = phone;
+            existing.Department = department;
+            existing.Role = role;
+            existing.UpdatedAt = now;
+            return;
+        }
+
+        db.ClientEmployees.Add(new ClientEmployee
+        {
+            TenantId = tenantId,
+            ClientId = clientId,
+            Name = name.Trim(),
+            Email = emailRaw.Trim(),
+            Phone = phone,
+            Department = department,
+            Role = role,
+            IsPrimary = false,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+    }
+
     private static async Task<IResult> AgentSyncAsync(AgentSyncRequest body, VisoHelpDbContext db)
     {
         if (string.IsNullOrWhiteSpace(body.AgentKey))
@@ -335,6 +440,7 @@ public static class PublicAuthEndpoints
         var device = await db.Devices.FirstOrDefaultAsync(d => d.AgentKey == key);
         var now = DateTimeOffset.UtcNow;
         var mac = string.IsNullOrWhiteSpace(body.MacAddress) ? "" : body.MacAddress.Trim();
+        var macNorm = NormalizeMacForCompare(mac);
 
         var codeNormalized = NormalizePublicCode(body.ClientPublicCode);
         Client? linkedClient = null;
@@ -349,6 +455,21 @@ public static class PublicAuthEndpoints
         var clientLabel = linkedClient != null
             ? linkedClient.Name.Trim()
             : (string.IsNullOrWhiteSpace(body.ClientName) ? "Nao informado" : body.ClientName.Trim());
+
+        if (device is null && linkedClient is not null && macNorm.Length >= 12)
+        {
+            var sameMac = await db.Devices
+                .Where(d => d.ClientId == linkedClient.Id)
+                .ToListAsync();
+            foreach (var d in sameMac)
+            {
+                if (NormalizeMacForCompare(d.MacAddress) == macNorm)
+                {
+                    device = d;
+                    break;
+                }
+            }
+        }
 
         if (device is null)
         {
@@ -375,12 +496,14 @@ public static class PublicAuthEndpoints
                     : body.AntivirusSummary.Trim(),
                 CpuSummary = string.IsNullOrWhiteSpace(body.CpuSummary) ? null : body.CpuSummary.Trim(),
                 GpuSummary = string.IsNullOrWhiteSpace(body.GpuSummary) ? null : body.GpuSummary.Trim(),
-                LastOsBootAt = body.LastOsBootAt
+                LastOsBootAt = body.LastOsBootAt,
+                CpuTempC = body.CpuTempC
             };
             db.Devices.Add(device);
         }
         else
         {
+            device.AgentKey = key;
             if (linkedClient != null)
             {
                 device.ClientId = linkedClient.Id;
@@ -412,6 +535,8 @@ public static class PublicAuthEndpoints
                 device.GpuSummary = body.GpuSummary.Trim();
             if (body.LastOsBootAt.HasValue)
                 device.LastOsBootAt = body.LastOsBootAt;
+            if (body.CpuTempC.HasValue)
+                device.CpuTempC = body.CpuTempC;
         }
 
         await db.SaveChangesAsync();

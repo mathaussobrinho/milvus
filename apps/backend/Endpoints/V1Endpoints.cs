@@ -370,7 +370,8 @@ public static class V1Endpoints
                     d.AntivirusSummary,
                     d.CpuSummary,
                     d.GpuSummary,
-                    d.LastOsBootAt);
+                    d.LastOsBootAt,
+                    d.CpuTempC);
             }).OrderBy(d => d.ClientName).ThenBy(d => d.Hostname).ToList();
 
             return Results.Ok(list);
@@ -411,6 +412,7 @@ public static class V1Endpoints
                 d.CpuSummary,
                 d.GpuSummary,
                 d.LastOsBootAt,
+                d.CpuTempC,
                 d.Notes,
                 d.AgentKey,
                 d.CreatedAt));

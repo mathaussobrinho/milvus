@@ -19,6 +19,8 @@ public class Device
     public string? GpuSummary { get; set; }
     /// <summary>Ultimo arranque do SO reportado pelo agente (WMI).</summary>
     public DateTimeOffset? LastOsBootAt { get; set; }
+    /// <summary>Temperatura aproximada da CPU em graus Celsius (quando disponivel).</summary>
+    public int? CpuTempC { get; set; }
     /// <summary>Notas internas editadas no painel.</summary>
     public string? Notes { get; set; }
     public string Hostname { get; set; } = string.Empty;

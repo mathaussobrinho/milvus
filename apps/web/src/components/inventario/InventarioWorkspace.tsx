@@ -31,6 +31,7 @@ export type DeviceRow = {
   cpuSummary: string | null;
   gpuSummary: string | null;
   lastOsBootAt: string | null;
+  cpuTempC: number | null;
 };
 
 type ClientOpt = { id: string; name: string };
@@ -81,6 +82,7 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
           d.antivirusSummary ?? "",
           d.cpuSummary ?? "",
           d.gpuSummary ?? "",
+          d.cpuTempC != null ? String(d.cpuTempC) : "",
         ]
           .join(" ")
           .toLowerCase();
@@ -215,6 +217,11 @@ export function InventarioWorkspace({ initialDevices, initialClients }: Props) {
                     <p className="text-xs text-muted">
                       {d.username} · {d.operatingSystem}
                     </p>
+                    {d.cpuTempC != null ? (
+                      <p className="mt-1 text-xs text-muted">
+                        CPU ~{d.cpuTempC}°C
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">
                     {d.lastOsBootAt

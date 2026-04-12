@@ -51,7 +51,8 @@ public record DeviceListItemDto(
     string? AntivirusSummary,
     string? CpuSummary,
     string? GpuSummary,
-    DateTimeOffset? LastOsBootAt);
+    DateTimeOffset? LastOsBootAt,
+    int? CpuTempC);
 
 public record DeviceDetailDto(
     Guid Id,
@@ -72,6 +73,7 @@ public record DeviceDetailDto(
     string? CpuSummary,
     string? GpuSummary,
     DateTimeOffset? LastOsBootAt,
+    int? CpuTempC,
     string? Notes,
     string AgentKey,
     DateTimeOffset CreatedAt);
@@ -98,7 +100,8 @@ public record AgentSyncRequest(
     string? AntivirusSummary,
     string? CpuSummary,
     string? GpuSummary,
-    DateTimeOffset? LastOsBootAt);
+    DateTimeOffset? LastOsBootAt,
+    int? CpuTempC);
 
 public record PublicClientByCodeDto(Guid Id, string Name, string PublicCode);
 
@@ -110,7 +113,16 @@ public record PublicCreateTicketRequest(
     string? RequesterEmail,
     string? RequesterPhone,
     string? RequesterDepartment,
+    string? RequesterRole,
     string? AgentKey);
+
+/// <summary>Perfil do solicitante para pre-preencher o portal (atalho com agentKey).</summary>
+public record PublicRequesterProfileDto(
+    string Name,
+    string Email,
+    string? Phone,
+    string? Department,
+    string? Role);
 
 /// <summary>Lista de chamados do portal publico (KEY + agentKey → dispositivo).</summary>
 public record PublicMyTicketItemDto(

@@ -41,6 +41,7 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
             entity.Property(d => d.CpuSummary).HasColumnName("cpu_summary").HasMaxLength(300);
             entity.Property(d => d.GpuSummary).HasColumnName("gpu_summary").HasMaxLength(500);
             entity.Property(d => d.LastOsBootAt).HasColumnName("last_os_boot_at");
+            entity.Property(d => d.CpuTempC).HasColumnName("cpu_temp_c");
             entity.Property(d => d.Notes).HasColumnName("notes").HasMaxLength(2000);
             entity.HasIndex(d => d.AgentKey).IsUnique();
             entity.HasOne(d => d.Client)
@@ -78,6 +79,7 @@ public class VisoHelpDbContext(DbContextOptions<VisoHelpDbContext> options) : Db
             entity.Property(t => t.RequesterEmail).HasColumnName("requester_email").HasMaxLength(200);
             entity.Property(t => t.RequesterPhone).HasColumnName("requester_phone").HasMaxLength(50);
             entity.Property(t => t.RequesterDepartment).HasColumnName("requester_department").HasMaxLength(120);
+            entity.Property(t => t.RequesterRole).HasColumnName("requester_role").HasMaxLength(120);
             entity.Property(t => t.Status).HasColumnName("status").HasMaxLength(30).IsRequired();
             entity.Property(t => t.Priority).HasColumnName("priority").HasMaxLength(30).IsRequired();
             entity.Property(t => t.CreatedAt).HasColumnName("created_at");

@@ -20,6 +20,8 @@ public class Ticket
     public string? RequesterEmail { get; set; }
     public string? RequesterPhone { get; set; }
     public string? RequesterDepartment { get; set; }
+    /// <summary>Cargo do solicitante (portal publico).</summary>
+    public string? RequesterRole { get; set; }
     public string Status { get; set; } = "open";
     public string Priority { get; set; } = "medium";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

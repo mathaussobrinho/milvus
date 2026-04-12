@@ -29,6 +29,7 @@ type DeviceDetail = {
   cpuSummary: string | null;
   gpuSummary: string | null;
   lastOsBootAt: string | null;
+  cpuTempC: number | null;
   notes: string | null;
   agentKey: string;
   createdAt: string;
@@ -192,6 +193,10 @@ export function DeviceDetailModal({ deviceId, clients, onClose, onSaved }: Props
                 {detail.lastOsBootAt
                   ? new Date(detail.lastOsBootAt).toLocaleString("pt-BR")
                   : "—"}
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Temperatura CPU (aprox.):</span>{" "}
+                {detail.cpuTempC != null ? `${detail.cpuTempC} °C` : "—"}
               </p>
               <p>
                 <span className="font-medium text-foreground">SO:</span> {detail.operatingSystem}

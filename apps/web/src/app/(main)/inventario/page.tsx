@@ -25,6 +25,7 @@ export default async function InventarioPage() {
         cpuSummary: string | null;
         gpuSummary: string | null;
         lastOsBootAt: string | null;
+        cpuTempC: number | null;
       }[]
     >("/api/v1/devices"),
     fetchJson<{ id: string; name: string }[]>("/api/v1/clients"),

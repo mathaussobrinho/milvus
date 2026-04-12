@@ -54,6 +54,7 @@ type SavedRequesterProfile = {
   email: string;
   phone: string;
   department: string;
+  role: string;
 };
 
 function parseStoredProfile(raw: string | null): SavedRequesterProfile | null {
@@ -68,6 +69,7 @@ function parseStoredProfile(raw: string | null): SavedRequesterProfile | null {
       email,
       phone: typeof j.phone === "string" ? j.phone.trim() : "",
       department: typeof j.department === "string" ? j.department.trim() : "",
+      role: typeof j.role === "string" ? j.role.trim() : "",
     };
   } catch {
     return null;
@@ -93,11 +95,11 @@ export function AbrirChamadoClient() {
   const [requesterEmail, setRequesterEmail] = useState("");
   const [requesterPhone, setRequesterPhone] = useState("");
   const [requesterDepartment, setRequesterDepartment] = useState("");
+  const [requesterRole, setRequesterRole] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [savedProfile, setSavedProfile] = useState<SavedRequesterProfile | null>(
     null
   );
-  const [editingProfile, setEditingProfile] = useState(false);
 
   const [trackerEmail, setTrackerEmail] = useState("");
   const [myTickets, setMyTickets] = useState<PublicMyTicketItem[] | null>(null);
@@ -168,8 +170,8 @@ export function AbrirChamadoClient() {
       setRequesterEmail(profile.email);
       setRequesterPhone(profile.phone);
       setRequesterDepartment(profile.department);
+      setRequesterRole(profile.role);
       setTrackerEmail(profile.email);
-      setEditingProfile(false);
       try {
         sessionStorage.setItem(storageEmailKey(code), profile.email);
       } catch {
@@ -178,7 +180,6 @@ export function AbrirChamadoClient() {
       return;
     }
     setSavedProfile(null);
-    setEditingProfile(false);
     try {
       const emailOnly = sessionStorage.getItem(storageEmailKey(code));
       if (emailOnly) setTrackerEmail(emailOnly);
@@ -187,9 +188,57 @@ export function AbrirChamadoClient() {
     }
   }, [publicCode]);
 
+  useEffect(() => {
+    const code = publicCode.trim().toUpperCase();
+    const k = agentKeyFromUrl.trim();
+    if (code.length < 3 || !k || !clientInfo) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const api = getApiBase();
+        const res = await fetch(
+          `${api}/api/v1/public/requester-profile?code=${encodeURIComponent(code)}&agentKey=${encodeURIComponent(k)}`,
+          { method: "GET", cache: "no-store" }
+        );
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as {
+          name: string;
+          email: string;
+          phone: string | null;
+          department: string | null;
+          role: string | null;
+        };
+        const prof: SavedRequesterProfile = {
+          name: json.name,
+          email: json.email,
+          phone: json.phone ?? "",
+          department: json.department ?? "",
+          role: json.role ?? "",
+        };
+        if (cancelled) return;
+        setSavedProfile(prof);
+        setRequesterName(prof.name);
+        setRequesterEmail(prof.email);
+        setRequesterPhone(prof.phone);
+        setRequesterDepartment(prof.department);
+        setRequesterRole(prof.role);
+        setTrackerEmail(prof.email);
+        try {
+          localStorage.setItem(storageProfileKey(code), JSON.stringify(prof));
+          sessionStorage.setItem(storageEmailKey(code), prof.email);
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [publicCode, agentKeyFromUrl, clientInfo]);
+
   const agentKey = agentKeyFromUrl.trim();
-  const compactProfile =
-    Boolean(savedProfile) && !editingProfile && tab === "novo";
 
   const fetchMyTickets = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
@@ -381,31 +430,13 @@ export function AbrirChamadoClient() {
     setRequesterEmail(p.email);
     setRequesterPhone(p.phone);
     setRequesterDepartment(p.department);
+    setRequesterRole(p.role);
     setTrackerEmail(p.email);
     try {
       sessionStorage.setItem(storageEmailKey(code), p.email);
     } catch {
       /* ignore */
     }
-    setEditingProfile(false);
-  }
-
-  function clearSavedProfile() {
-    const code = publicCode.trim().toUpperCase();
-    if (code.length < 3) return;
-    try {
-      localStorage.removeItem(storageProfileKey(code));
-      sessionStorage.removeItem(storageEmailKey(code));
-    } catch {
-      /* ignore */
-    }
-    setSavedProfile(null);
-    setEditingProfile(false);
-    setRequesterName("");
-    setRequesterEmail("");
-    setRequesterPhone("");
-    setRequesterDepartment("");
-    setTrackerEmail("");
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -415,7 +446,7 @@ export function AbrirChamadoClient() {
       showToast({ title: "Preencha o titulo.", variant: "error" });
       return;
     }
-    const useCompact = Boolean(savedProfile && !editingProfile);
+    const useCompact = Boolean(savedProfile);
     const prof: SavedRequesterProfile = useCompact
       ? savedProfile!
       : {
@@ -423,6 +454,7 @@ export function AbrirChamadoClient() {
           email: requesterEmail.trim(),
           phone: requesterPhone.trim(),
           department: requesterDepartment.trim(),
+          role: requesterRole.trim(),
         };
     if (!useCompact) {
       if (!prof.name || !prof.email) {
@@ -455,6 +487,7 @@ export function AbrirChamadoClient() {
         requesterEmail: prof.email,
         requesterPhone: prof.phone || null,
         requesterDepartment: prof.department || null,
+        requesterRole: prof.role || null,
       };
       if (agentKeyFromUrl) body.agentKey = agentKeyFromUrl;
 
@@ -511,7 +544,9 @@ export function AbrirChamadoClient() {
       <p className="mb-4 text-sm text-muted">
         Cliente identificado pelo ambiente.{" "}
         {savedProfile
-          ? "Seus dados estao salvos neste navegador; basta titulo e mensagem para novos chamados."
+          ? agentKey
+            ? "Seus dados estao registrados; basta titulo e mensagem para novos chamados."
+            : "Seus dados estao neste navegador; basta titulo e mensagem para novos chamados."
           : "Preencha seus dados e o problema. Nao e necessario login."}
       </p>
 
@@ -556,46 +591,7 @@ export function AbrirChamadoClient() {
               <p className="font-medium text-primary">{clientInfo.name}</p>
             </div>
           )}
-          {savedProfile && compactProfile && (
-            <div className="rounded-lg border border-border bg-background/80 px-3 py-3 text-sm">
-              <p className="text-xs uppercase text-muted">Solicitante (salvo)</p>
-              <p className="mt-1 font-medium text-foreground">{savedProfile.name}</p>
-              <p className="text-xs text-muted">{savedProfile.email}</p>
-              {(savedProfile.phone || savedProfile.department) && (
-                <p className="mt-1 text-xs text-muted">
-                  {[savedProfile.phone, savedProfile.department]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              )}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingProfile(true)}
-                  className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-background"
-                >
-                  Editar dados
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      typeof window !== "undefined" &&
-                      window.confirm(
-                        "Remover dados salvos neste navegador? Voce precisara preencher tudo de novo."
-                      )
-                    ) {
-                      clearSavedProfile();
-                    }
-                  }}
-                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted hover:bg-background"
-                >
-                  Limpar dados salvos
-                </button>
-              </div>
-            </div>
-          )}
-          {(!savedProfile || editingProfile || !compactProfile) && (
+          {!savedProfile && (
             <>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase text-muted">
@@ -605,7 +601,7 @@ export function AbrirChamadoClient() {
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
                   value={requesterName}
                   onChange={(e) => setRequesterName(e.target.value)}
-                  required={!savedProfile || editingProfile}
+                  required
                   maxLength={200}
                   autoComplete="name"
                 />
@@ -616,18 +612,12 @@ export function AbrirChamadoClient() {
                 </label>
                 <input
                   type="email"
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2 read-only:cursor-not-allowed read-only:bg-background/80 read-only:text-muted"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
                   value={requesterEmail}
                   onChange={(e) => setRequesterEmail(e.target.value)}
-                  readOnly={Boolean(savedProfile)}
-                  required={!savedProfile || editingProfile}
+                  required
                   maxLength={200}
                   autoComplete="email"
-                  title={
-                    savedProfile
-                      ? "O e-mail nao pode ser alterado apos o primeiro chamado."
-                      : undefined
-                  }
                 />
               </div>
               <div>
@@ -654,23 +644,18 @@ export function AbrirChamadoClient() {
                   maxLength={120}
                 />
               </div>
-              {editingProfile && savedProfile ? (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingProfile(false);
-                      setRequesterName(savedProfile.name);
-                      setRequesterEmail(savedProfile.email);
-                      setRequesterPhone(savedProfile.phone);
-                      setRequesterDepartment(savedProfile.department);
-                    }}
-                    className="text-sm font-medium text-primary hover:underline"
-                  >
-                    Cancelar edicao
-                  </button>
-                </div>
-              ) : null}
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase text-muted">
+                  Cargo
+                </label>
+                <input
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"
+                  value={requesterRole}
+                  onChange={(e) => setRequesterRole(e.target.value)}
+                  maxLength={120}
+                  placeholder="Opcional"
+                />
+              </div>
             </>
           )}
           <div>

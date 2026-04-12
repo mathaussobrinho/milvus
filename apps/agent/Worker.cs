@@ -86,6 +86,7 @@ public class Worker : BackgroundService
         var cpu = snap.CpuSummary;
         var gpu = snap.GpuSummary;
         var lastBoot = snap.LastOsBootAt;
+        var cpuTempC = snap.CpuTempC;
 
         try
         {
@@ -116,6 +117,8 @@ public class Worker : BackgroundService
                 body["gpuSummary"] = gpu;
             if (lastBoot.HasValue)
                 body["lastOsBootAt"] = lastBoot.Value;
+            if (cpuTempC.HasValue)
+                body["cpuTempC"] = cpuTempC.Value;
 
             var response = await client.PostAsJsonAsync(
                 $"{baseUrl}/api/v1/agent/sync",

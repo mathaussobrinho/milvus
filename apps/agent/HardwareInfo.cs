@@ -15,7 +15,8 @@ internal static class HardwareInfo
         string AntivirusSummary,
         string? CpuSummary,
         string? GpuSummary,
-        DateTimeOffset? LastOsBootAt);
+        DateTimeOffset? LastOsBootAt,
+        int? CpuTempC);
 
     /// <summary>Recolhe RAM, disco, AV, CPU, GPU e boot numa thread STA.</summary>
     public static SyncSnapshot CollectForSync()
@@ -30,10 +31,16 @@ internal static class HardwareInfo
                 var av = QueryAntivirusSummary();
                 var cpu = QueryCpuFromWmi();
                 if (string.IsNullOrWhiteSpace(cpu))
+                {
+                    Thread.Sleep(200);
+                    cpu = QueryCpuFromWmi();
+                }
+                if (string.IsNullOrWhiteSpace(cpu))
                     cpu = QueryCpuFromRegistry();
                 var gpu = QueryGpuSummary();
                 var boot = QueryLastOsBootUtc();
-                result = new SyncSnapshot(ram, disk, av, cpu, gpu, boot);
+                var tempC = QueryCpuTempC();
+                result = new SyncSnapshot(ram, disk, av, cpu, gpu, boot, tempC);
             }
             catch
             {
@@ -44,9 +51,9 @@ internal static class HardwareInfo
         t.IsBackground = true;
         t.Start();
         if (!t.Join(TimeSpan.FromSeconds(45)))
-            return new SyncSnapshot(null, null, "Indisponivel", null, null, null);
+            return new SyncSnapshot(null, null, "Indisponivel", null, null, null, null);
 
-        return result ?? new SyncSnapshot(null, null, "Indisponivel", null, null, null);
+        return result ?? new SyncSnapshot(null, null, "Indisponivel", null, null, null, null);
     }
 
     private static long? QueryTotalRamMb()
@@ -183,6 +190,7 @@ internal static class HardwareInfo
         {
             using var searcher = new ManagementObjectSearcher("SELECT Name, VideoProcessor FROM Win32_VideoController");
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? basicFallback = null;
             foreach (ManagementObject o in searcher.Get())
             {
                 try
@@ -192,8 +200,13 @@ internal static class HardwareInfo
                         name = o["VideoProcessor"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(name))
                         continue;
-                    if (name.Contains("Microsoft Basic Render Driver", StringComparison.OrdinalIgnoreCase))
+                    if (name.Contains("Microsoft Basic Render Driver", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("Microsoft Basic Display", StringComparison.OrdinalIgnoreCase))
+                    {
+                        basicFallback ??= name;
                         continue;
+                    }
+
                     names.Add(name);
                 }
                 finally
@@ -202,12 +215,49 @@ internal static class HardwareInfo
                 }
             }
 
-            return names.Count > 0 ? string.Join(" · ", names) : null;
+            if (names.Count > 0)
+                return string.Join(" · ", names);
+            return basicFallback;
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Temperatura aproximada (ACPI/WMI). Muitos desktops nao expoem sensores; retorna null.
+    /// </summary>
+    private static int? QueryCpuTempC()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature");
+            foreach (ManagementObject o in searcher.Get())
+            {
+                try
+                {
+                    var raw = o["CurrentTemperature"];
+                    if (raw is int tenthsKelvin)
+                    {
+                        var kelvin = tenthsKelvin / 10.0;
+                        var c = (int)Math.Round(kelvin - 273.15);
+                        if (c >= -40 && c <= 120)
+                            return c;
+                    }
+                }
+                finally
+                {
+                    o.Dispose();
+                }
+            }
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        return null;
     }
 
     private static DateTimeOffset? QueryLastOsBootUtc()
