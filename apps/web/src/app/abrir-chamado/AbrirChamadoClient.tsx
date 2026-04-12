@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   isTerminalStatus,
   priorityLabel,
@@ -113,9 +113,11 @@ function getFirstTicketDoneFromStorage(
 }
 
 export function AbrirChamadoClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const keyFromUrl = searchParams.get("key")?.trim() ?? "";
   const agentKeyFromUrl = searchParams.get("agentKey")?.trim() ?? "";
+  const resetFromUrl = searchParams.get("reset")?.trim().toLowerCase() ?? "";
   const tabFromUrl = searchParams.get("tab")?.toLowerCase();
 
   const [tab, setTab] = useState<"novo" | "meus">(
@@ -191,6 +193,63 @@ export function AbrirChamadoClient() {
     if (tabFromUrl === "meus") setTab("meus");
     if (tabFromUrl === "novo") setTab("novo");
   }, [tabFromUrl]);
+
+  /** ?reset=1 forca limpar dados do portal neste codigo (ex.: perfil antigo sem visohelp_public_agent_*). */
+  useEffect(() => {
+    const code = publicCode.trim().toUpperCase();
+    if (code.length < 3) return;
+    if (resetFromUrl !== "1" && resetFromUrl !== "true") return;
+    try {
+      clearPortalStorageForCode(code);
+      localStorage.removeItem(storageAgentKey(code));
+      setSavedProfile(null);
+      setFirstTicketDone(false);
+      setRequesterName("");
+      setRequesterEmail("");
+      setRequesterPhone("");
+      setRequesterDepartment("");
+      setRequesterRole("");
+      setTrackerEmail("");
+      setTitle("");
+      setMessage("");
+      if (typeof window !== "undefined") {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("reset");
+        router.replace(u.pathname + u.search + u.hash);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [publicCode, resetFromUrl, router]);
+
+  /**
+   * URL so com ?key= sem agentKey, mas este browser ja tinha agente guardado (atalho com agente).
+   * Tipico: desinstalou o agente e abriu bookmark / link so com o codigo — limpa como novo inicio.
+   */
+  useEffect(() => {
+    const code = publicCode.trim().toUpperCase();
+    if (code.length < 3) return;
+    const k = agentKeyFromUrl.trim();
+    if (k) return;
+    try {
+      const storedAgent = localStorage.getItem(storageAgentKey(code));
+      if (!storedAgent) return;
+      clearPortalStorageForCode(code);
+      localStorage.removeItem(storageAgentKey(code));
+      setSavedProfile(null);
+      setFirstTicketDone(false);
+      setRequesterName("");
+      setRequesterEmail("");
+      setRequesterPhone("");
+      setRequesterDepartment("");
+      setRequesterRole("");
+      setTrackerEmail("");
+      setTitle("");
+      setMessage("");
+    } catch {
+      /* ignore */
+    }
+  }, [publicCode, agentKeyFromUrl]);
 
   /** Troca de agentKey (reinstalacao): limpa perfil e flags neste codigo. */
   useEffect(() => {
