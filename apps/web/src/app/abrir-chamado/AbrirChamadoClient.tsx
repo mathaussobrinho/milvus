@@ -49,6 +49,24 @@ function storageProfileKey(publicCode: string) {
   return `visohelp_public_profile_${publicCode.trim().toUpperCase()}`;
 }
 
+function storageAgentKey(publicCode: string) {
+  return `visohelp_public_agent_${publicCode.trim().toUpperCase()}`;
+}
+
+function storageFirstTicketKey(publicCode: string) {
+  return `visohelp_public_first_ticket_${publicCode.trim().toUpperCase()}`;
+}
+
+function clearPortalStorageForCode(publicCode: string) {
+  try {
+    localStorage.removeItem(storageProfileKey(publicCode));
+    localStorage.removeItem(storageFirstTicketKey(publicCode));
+    sessionStorage.removeItem(storageEmailKey(publicCode));
+  } catch {
+    /* ignore */
+  }
+}
+
 type SavedRequesterProfile = {
   name: string;
   email: string;
@@ -76,6 +94,24 @@ function parseStoredProfile(raw: string | null): SavedRequesterProfile | null {
   }
 }
 
+/** Flag explicita; migracao legacy: sem flag + sem agentKey na URL + perfil guardado => ja abriu chamado antes. */
+function getFirstTicketDoneFromStorage(
+  code: string,
+  agentKeyInUrl: string
+): boolean {
+  try {
+    const raw = localStorage.getItem(storageFirstTicketKey(code));
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+    if (agentKeyInUrl.trim().length > 0) return false;
+    return (
+      parseStoredProfile(localStorage.getItem(storageProfileKey(code))) !== null
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function AbrirChamadoClient() {
   const searchParams = useSearchParams();
   const keyFromUrl = searchParams.get("key")?.trim() ?? "";
@@ -100,6 +136,7 @@ export function AbrirChamadoClient() {
   const [savedProfile, setSavedProfile] = useState<SavedRequesterProfile | null>(
     null
   );
+  const [firstTicketDone, setFirstTicketDone] = useState(false);
 
   const [trackerEmail, setTrackerEmail] = useState("");
   const [myTickets, setMyTickets] = useState<PublicMyTicketItem[] | null>(null);
@@ -155,15 +192,44 @@ export function AbrirChamadoClient() {
     if (tabFromUrl === "novo") setTab("novo");
   }, [tabFromUrl]);
 
+  /** Troca de agentKey (reinstalacao): limpa perfil e flags neste codigo. */
   useEffect(() => {
     const code = publicCode.trim().toUpperCase();
     if (code.length < 3) return;
+    const k = agentKeyFromUrl.trim();
+    if (!k) return;
+    try {
+      const prev = localStorage.getItem(storageAgentKey(code));
+      if (prev && prev !== k) {
+        clearPortalStorageForCode(code);
+        setSavedProfile(null);
+        setFirstTicketDone(false);
+        setRequesterName("");
+        setRequesterEmail("");
+        setRequesterPhone("");
+        setRequesterDepartment("");
+        setRequesterRole("");
+        setTrackerEmail("");
+        setTitle("");
+        setMessage("");
+      }
+      localStorage.setItem(storageAgentKey(code), k);
+    } catch {
+      /* ignore */
+    }
+  }, [publicCode, agentKeyFromUrl]);
+
+  useEffect(() => {
+    const code = publicCode.trim().toUpperCase();
+    if (code.length < 3) return;
+    const k = agentKeyFromUrl.trim();
     let profile: SavedRequesterProfile | null = null;
     try {
       profile = parseStoredProfile(localStorage.getItem(storageProfileKey(code)));
     } catch {
       /* ignore */
     }
+    setFirstTicketDone(getFirstTicketDoneFromStorage(code, k));
     if (profile) {
       setSavedProfile(profile);
       setRequesterName(profile.name);
@@ -186,12 +252,14 @@ export function AbrirChamadoClient() {
     } catch {
       /* ignore */
     }
-  }, [publicCode]);
+  }, [publicCode, agentKeyFromUrl]);
 
+  /** Preenche campos a partir da API; nao grava perfil nem ativa modo compacto ate o primeiro POST. */
   useEffect(() => {
     const code = publicCode.trim().toUpperCase();
     const k = agentKeyFromUrl.trim();
     if (code.length < 3 || !k || !clientInfo) return;
+    if (getFirstTicketDoneFromStorage(code, k)) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -216,7 +284,6 @@ export function AbrirChamadoClient() {
           role: json.role ?? "",
         };
         if (cancelled) return;
-        setSavedProfile(prof);
         setRequesterName(prof.name);
         setRequesterEmail(prof.email);
         setRequesterPhone(prof.phone);
@@ -224,7 +291,6 @@ export function AbrirChamadoClient() {
         setRequesterRole(prof.role);
         setTrackerEmail(prof.email);
         try {
-          localStorage.setItem(storageProfileKey(code), JSON.stringify(prof));
           sessionStorage.setItem(storageEmailKey(code), prof.email);
         } catch {
           /* ignore */
@@ -239,6 +305,7 @@ export function AbrirChamadoClient() {
   }, [publicCode, agentKeyFromUrl, clientInfo]);
 
   const agentKey = agentKeyFromUrl.trim();
+  const compactMode = savedProfile !== null && firstTicketDone;
 
   const fetchMyTickets = useCallback(async () => {
     const code = publicCode.trim().toUpperCase();
@@ -422,10 +489,12 @@ export function AbrirChamadoClient() {
   function persistProfile(code: string, p: SavedRequesterProfile) {
     try {
       localStorage.setItem(storageProfileKey(code), JSON.stringify(p));
+      localStorage.setItem(storageFirstTicketKey(code), "1");
     } catch {
       /* ignore */
     }
     setSavedProfile(p);
+    setFirstTicketDone(true);
     setRequesterName(p.name);
     setRequesterEmail(p.email);
     setRequesterPhone(p.phone);
@@ -446,7 +515,7 @@ export function AbrirChamadoClient() {
       showToast({ title: "Preencha o titulo.", variant: "error" });
       return;
     }
-    const useCompact = Boolean(savedProfile);
+    const useCompact = compactMode;
     const prof: SavedRequesterProfile = useCompact
       ? savedProfile!
       : {
@@ -543,7 +612,7 @@ export function AbrirChamadoClient() {
       </h1>
       <p className="mb-4 text-sm text-muted">
         Cliente identificado pelo ambiente.{" "}
-        {savedProfile
+        {compactMode
           ? agentKey
             ? "Seus dados estao registrados; basta titulo e mensagem para novos chamados."
             : "Seus dados estao neste navegador; basta titulo e mensagem para novos chamados."
@@ -591,7 +660,7 @@ export function AbrirChamadoClient() {
               <p className="font-medium text-primary">{clientInfo.name}</p>
             </div>
           )}
-          {!savedProfile && (
+          {!compactMode && (
             <>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase text-muted">
@@ -635,7 +704,7 @@ export function AbrirChamadoClient() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase text-muted">
-                  Departamento
+                  Setor
                 </label>
                 <input
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none ring-primary focus:ring-2"

@@ -41,42 +41,17 @@ internal static class HardwareInfo
                 var boot = QueryLastOsBootUtc();
                 var tempC = QueryCpuTempC();
                 result = new SyncSnapshot(ram, disk, av, cpu, gpu, boot, tempC);
-                // #region agent log
-                DebugSessionLog.Append(
-                    "H1-H3",
-                    "HardwareInfo.CollectForSync:STA_done",
-                    new
-                    {
-                        ramMb = ram,
-                        diskGb = disk,
-                        avLen = av?.Length ?? 0,
-                        cpuLen = cpu?.Length ?? 0,
-                        gpuLen = gpu?.Length ?? 0,
-                        hasBoot = boot.HasValue,
-                        tempC
-                    });
-                // #endregion
             }
-            catch (Exception ex)
+            catch
             {
-                // #region agent log
-                DebugSessionLog.Append(
-                    "H4",
-                    "HardwareInfo.CollectForSync:STA_exception",
-                    new { exType = ex.GetType().Name, exMessage = ex.Message });
-                // #endregion
+                /* ignore */
             }
         });
         t.SetApartmentState(ApartmentState.STA);
         t.IsBackground = true;
         t.Start();
         if (!t.Join(TimeSpan.FromSeconds(45)))
-        {
-            // #region agent log
-            DebugSessionLog.Append("H3", "HardwareInfo.CollectForSync:timeout_45s", new { });
-            // #endregion
             return new SyncSnapshot(null, null, "Indisponivel", null, null, null, null);
-        }
 
         return result ?? new SyncSnapshot(null, null, "Indisponivel", null, null, null, null);
     }
@@ -169,7 +144,6 @@ internal static class HardwareInfo
 
     private static string? QueryCpuFromWmi()
     {
-        var rowCount = 0;
         try
         {
             var scope = new ManagementScope(@"\\.\root\cimv2");
@@ -178,22 +152,13 @@ internal static class HardwareInfo
             using var searcher = new ManagementObjectSearcher(scope, query);
             foreach (ManagementObject o in searcher.Get())
             {
-                rowCount++;
                 try
                 {
                     var name = o["Name"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(name))
                         name = o["Manufacturer"]?.ToString()?.Trim();
                     if (!string.IsNullOrEmpty(name))
-                    {
-                        // #region agent log
-                        DebugSessionLog.Append(
-                            "H3",
-                            "QueryCpuFromWmi:hit",
-                            new { rowCount, runId = "post-fix" });
-                        // #endregion
                         return name;
-                    }
                 }
                 finally
                 {
@@ -206,9 +171,6 @@ internal static class HardwareInfo
             /* ignore */
         }
 
-        // #region agent log
-        DebugSessionLog.Append("H3", "QueryCpuFromWmi:no_hit", new { rowCount });
-        // #endregion
         return null;
     }
 
@@ -222,15 +184,7 @@ internal static class HardwareInfo
                 using var key = baseKey.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
                 var v = key?.GetValue("ProcessorNameString") as string;
                 if (!string.IsNullOrWhiteSpace(v))
-                {
-                    // #region agent log
-                    DebugSessionLog.Append(
-                        "H3",
-                        "QueryCpuFromRegistry:hit",
-                        new { view = view.ToString(), runId = "post-fix" });
-                    // #endregion
                     return v.Trim();
-                }
             }
             catch
             {
@@ -251,10 +205,8 @@ internal static class HardwareInfo
             using var searcher = new ManagementObjectSearcher(scope, query);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string? basicFallback = null;
-            var gpuRows = 0;
             foreach (ManagementObject o in searcher.Get())
             {
-                gpuRows++;
                 try
                 {
                     var name = o["Name"]?.ToString()?.Trim();
@@ -280,19 +232,8 @@ internal static class HardwareInfo
             }
 
             if (names.Count > 0)
-            {
-                // #region agent log
-                DebugSessionLog.Append(
-                    "H3",
-                    "QueryGpuSummary:hit",
-                    new { gpuRows, count = names.Count, runId = "post-fix" });
-                // #endregion
                 return string.Join(" · ", names);
-            }
 
-            // #region agent log
-            DebugSessionLog.Append("H3", "QueryGpuSummary:fallback_only", new { gpuRows, hasBasic = basicFallback != null });
-            // #endregion
             return basicFallback;
         }
         catch
@@ -303,8 +244,6 @@ internal static class HardwareInfo
 
     /// <summary>
     /// Temperatura aproximada (ACPI/WMI). Muitos desktops nao expoem sensores; retorna null.
-    /// </summary>
-    /// <summary>
     /// ACPI devolve CurrentTemperature em decimos de Kelvin (ex.: UInt16). Antes so aceitavamos int.
     /// </summary>
     private static int? TryConvertAcpiThermalTenthsKelvinToC(object? raw)
@@ -350,23 +289,9 @@ internal static class HardwareInfo
                 try
                 {
                     var raw = o["CurrentTemperature"];
-                    // #region agent log
-                    DebugSessionLog.Append(
-                        "H1",
-                        "QueryCpuTempC:raw",
-                        new { rawType = raw?.GetType().FullName, rawStr = raw?.ToString() });
-                    // #endregion
                     var c = TryConvertAcpiThermalTenthsKelvinToC(raw);
                     if (c.HasValue)
-                    {
-                        // #region agent log
-                        DebugSessionLog.Append(
-                            "H1",
-                            "QueryCpuTempC:convertedC",
-                            new { c = c.Value, runId = "post-fix" });
-                        // #endregion
                         return c;
-                    }
                 }
                 finally
                 {
@@ -392,37 +317,12 @@ internal static class HardwareInfo
                 try
                 {
                     var raw = o["LastBootUpTime"];
-                    // #region agent log
-                    DebugSessionLog.Append(
-                        "H2",
-                        "QueryLastOsBootUtc:raw",
-                        new { rawType = raw?.GetType().FullName, rawStr = raw?.ToString() });
-                    // #endregion
                     if (raw is string s)
-                    {
-                        var bootFromString = new DateTimeOffset(ManagementDateTimeConverter.ToDateTime(s));
-                        DebugSessionLog.Append(
-                            "H2",
-                            "QueryLastOsBootUtc:parsed",
-                            new { fromString = true, runId = "post-fix" });
-                        return bootFromString;
-                    }
+                        return new DateTimeOffset(ManagementDateTimeConverter.ToDateTime(s));
                     if (raw is DateTime dt)
-                    {
-                        DebugSessionLog.Append(
-                            "H2",
-                            "QueryLastOsBootUtc:parsed",
-                            new { fromDateTime = true, runId = "post-fix" });
                         return new DateTimeOffset(dt);
-                    }
                     if (raw is DateTimeOffset dtoRaw)
-                    {
-                        DebugSessionLog.Append(
-                            "H2",
-                            "QueryLastOsBootUtc:parsed",
-                            new { fromDto = true, runId = "post-fix" });
                         return dtoRaw;
-                    }
                 }
                 finally
                 {

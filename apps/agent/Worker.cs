@@ -120,21 +120,6 @@ public class Worker : BackgroundService
             if (cpuTempC.HasValue)
                 body["cpuTempC"] = cpuTempC.Value;
 
-            // #region agent log
-            DebugSessionLog.Append(
-                "H5",
-                "Worker.DoSyncAsync:payload",
-                new
-                {
-                    hasCpu = body.ContainsKey("cpuSummary"),
-                    hasGpu = body.ContainsKey("gpuSummary"),
-                    hasTemp = body.ContainsKey("cpuTempC"),
-                    hasBoot = body.ContainsKey("lastOsBootAt"),
-                    cpuPreviewLen = cpu?.Length ?? 0,
-                    gpuPreviewLen = gpu?.Length ?? 0
-                });
-            // #endregion
-
             var response = await client.PostAsJsonAsync(
                 $"{baseUrl}/api/v1/agent/sync",
                 body,

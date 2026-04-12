@@ -30,9 +30,6 @@ public sealed class SetupWizardForm : Form
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Padding = new Padding(16);
 
-        var apiDisplay = InstallConfigLoader.GetApiBase(_installConfig);
-        var webDisplay = InstallConfigLoader.GetWebBaseUrl(_installConfig);
-
         var table = new TableLayoutPanel
         {
             ColumnCount = 2,
@@ -44,7 +41,7 @@ public sealed class SetupWizardForm : Form
 
         var intro = new Label
         {
-            Text = "Informe apenas a KEY publica do cliente (cadastro em Clientes). As URLs do ambiente ja estao configuradas. A KEY sera validada na API antes de instalar.",
+            Text = "Informe apenas a KEY publica do cliente (cadastro em Clientes). A KEY sera validada na API antes de instalar.",
             AutoSize = true,
             MaximumSize = new Size(520, 0)
         };
@@ -54,26 +51,6 @@ public sealed class SetupWizardForm : Form
         table.Controls.Add(new Label { Text = "Codigo (KEY):", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
         _keyBox = new TextBox { Width = 320, MaxLength = 8 };
         table.Controls.Add(_keyBox, 1, 1);
-
-        table.Controls.Add(new Label { Text = "API (automatico):", AutoSize = true }, 0, 2);
-        var apiLabel = new Label
-        {
-            Text = apiDisplay,
-            AutoSize = true,
-            MaximumSize = new Size(360, 0),
-            ForeColor = System.Drawing.Color.DimGray
-        };
-        table.Controls.Add(apiLabel, 1, 2);
-
-        table.Controls.Add(new Label { Text = "Site (automatico):", AutoSize = true }, 0, 3);
-        var webLabel = new Label
-        {
-            Text = webDisplay,
-            AutoSize = true,
-            MaximumSize = new Size(360, 0),
-            ForeColor = System.Drawing.Color.DimGray
-        };
-        table.Controls.Add(webLabel, 1, 3);
 
         _installBtn = new Button
         {
@@ -89,7 +66,7 @@ public sealed class SetupWizardForm : Form
         flow.Controls.Add(cancelBtn);
 
         table.SetColumnSpan(flow, 2);
-        table.Controls.Add(flow, 0, 4);
+        table.Controls.Add(flow, 0, 2);
 
         Controls.Add(table);
     }
