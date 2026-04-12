@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using VisoHelp.Api.Contracts;
 using VisoHelp.Api.Data;
 using VisoHelp.Api.Domain;
@@ -429,8 +430,20 @@ public static class PublicAuthEndpoints
         });
     }
 
-    private static async Task<IResult> AgentSyncAsync(AgentSyncRequest body, VisoHelpDbContext db)
+    private static async Task<IResult> AgentSyncAsync(
+        AgentSyncRequest body,
+        VisoHelpDbContext db,
+        ILoggerFactory loggerFactory)
     {
+        // #region agent log
+        var log = loggerFactory.CreateLogger("AgentSyncDebug");
+        log.LogWarning(
+            "InvSync H6 cpuLen={CpuLen} gpuLen={GpuLen} temp={Temp} boot={HasBoot}",
+            body.CpuSummary?.Length ?? -1,
+            body.GpuSummary?.Length ?? -1,
+            body.CpuTempC,
+            body.LastOsBootAt != null);
+        // #endregion
         if (string.IsNullOrWhiteSpace(body.AgentKey))
             return Results.BadRequest(new { error = "AgentKey obrigatorio." });
         if (string.IsNullOrWhiteSpace(body.Hostname))

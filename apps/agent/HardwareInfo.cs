@@ -41,17 +41,42 @@ internal static class HardwareInfo
                 var boot = QueryLastOsBootUtc();
                 var tempC = QueryCpuTempC();
                 result = new SyncSnapshot(ram, disk, av, cpu, gpu, boot, tempC);
+                // #region agent log
+                DebugSessionLog.Append(
+                    "H1-H3",
+                    "HardwareInfo.CollectForSync:STA_done",
+                    new
+                    {
+                        ramMb = ram,
+                        diskGb = disk,
+                        avLen = av?.Length ?? 0,
+                        cpuLen = cpu?.Length ?? 0,
+                        gpuLen = gpu?.Length ?? 0,
+                        hasBoot = boot.HasValue,
+                        tempC
+                    });
+                // #endregion
             }
-            catch
+            catch (Exception ex)
             {
-                /* ignore */
+                // #region agent log
+                DebugSessionLog.Append(
+                    "H4",
+                    "HardwareInfo.CollectForSync:STA_exception",
+                    new { exType = ex.GetType().Name, exMessage = ex.Message });
+                // #endregion
             }
         });
         t.SetApartmentState(ApartmentState.STA);
         t.IsBackground = true;
         t.Start();
         if (!t.Join(TimeSpan.FromSeconds(45)))
+        {
+            // #region agent log
+            DebugSessionLog.Append("H3", "HardwareInfo.CollectForSync:timeout_45s", new { });
+            // #endregion
             return new SyncSnapshot(null, null, "Indisponivel", null, null, null, null);
+        }
 
         return result ?? new SyncSnapshot(null, null, "Indisponivel", null, null, null, null);
     }
@@ -228,6 +253,42 @@ internal static class HardwareInfo
     /// <summary>
     /// Temperatura aproximada (ACPI/WMI). Muitos desktops nao expoem sensores; retorna null.
     /// </summary>
+    /// <summary>
+    /// ACPI devolve CurrentTemperature em decimos de Kelvin (ex.: UInt16). Antes so aceitavamos int.
+    /// </summary>
+    private static int? TryConvertAcpiThermalTenthsKelvinToC(object? raw)
+    {
+        if (raw is null)
+            return null;
+        double tenths;
+        try
+        {
+            tenths = raw switch
+            {
+                ushort u => u,
+                short s => s,
+                uint ui => ui,
+                int i => i,
+                long l => l,
+                ulong ul => ul,
+                byte b => b,
+                _ => Convert.ToDouble(raw, System.Globalization.CultureInfo.InvariantCulture)
+            };
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (tenths <= 0)
+            return null;
+        var kelvin = tenths / 10.0;
+        var c = (int)Math.Round(kelvin - 273.15);
+        if (c >= -40 && c <= 120)
+            return c;
+        return null;
+    }
+
     private static int? QueryCpuTempC()
     {
         try
@@ -238,12 +299,22 @@ internal static class HardwareInfo
                 try
                 {
                     var raw = o["CurrentTemperature"];
-                    if (raw is int tenthsKelvin)
+                    // #region agent log
+                    DebugSessionLog.Append(
+                        "H1",
+                        "QueryCpuTempC:raw",
+                        new { rawType = raw?.GetType().FullName, rawStr = raw?.ToString() });
+                    // #endregion
+                    var c = TryConvertAcpiThermalTenthsKelvinToC(raw);
+                    if (c.HasValue)
                     {
-                        var kelvin = tenthsKelvin / 10.0;
-                        var c = (int)Math.Round(kelvin - 273.15);
-                        if (c >= -40 && c <= 120)
-                            return c;
+                        // #region agent log
+                        DebugSessionLog.Append(
+                            "H1",
+                            "QueryCpuTempC:convertedC",
+                            new { c = c.Value, runId = "post-fix" });
+                        // #endregion
+                        return c;
                     }
                 }
                 finally
@@ -270,8 +341,37 @@ internal static class HardwareInfo
                 try
                 {
                     var raw = o["LastBootUpTime"];
+                    // #region agent log
+                    DebugSessionLog.Append(
+                        "H2",
+                        "QueryLastOsBootUtc:raw",
+                        new { rawType = raw?.GetType().FullName, rawStr = raw?.ToString() });
+                    // #endregion
                     if (raw is string s)
-                        return new DateTimeOffset(ManagementDateTimeConverter.ToDateTime(s));
+                    {
+                        var bootFromString = new DateTimeOffset(ManagementDateTimeConverter.ToDateTime(s));
+                        DebugSessionLog.Append(
+                            "H2",
+                            "QueryLastOsBootUtc:parsed",
+                            new { fromString = true, runId = "post-fix" });
+                        return bootFromString;
+                    }
+                    if (raw is DateTime dt)
+                    {
+                        DebugSessionLog.Append(
+                            "H2",
+                            "QueryLastOsBootUtc:parsed",
+                            new { fromDateTime = true, runId = "post-fix" });
+                        return new DateTimeOffset(dt);
+                    }
+                    if (raw is DateTimeOffset dtoRaw)
+                    {
+                        DebugSessionLog.Append(
+                            "H2",
+                            "QueryLastOsBootUtc:parsed",
+                            new { fromDto = true, runId = "post-fix" });
+                        return dtoRaw;
+                    }
                 }
                 finally
                 {
