@@ -328,6 +328,16 @@ public static class V1Endpoints
             return Results.NoContent();
         });
 
+        v1.MapDelete("/tickets/{id:guid}", async (Guid id, VisoHelpDbContext db) =>
+        {
+            var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
+            if (ticket is null)
+                return Results.NotFound();
+            db.Tickets.Remove(ticket);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         v1.MapGet("/devices", async (VisoHelpDbContext db) =>
         {
             var devices = await db.Devices.AsNoTracking().ToListAsync();

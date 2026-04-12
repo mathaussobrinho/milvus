@@ -59,6 +59,7 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
   const [analysts, setAnalysts] = useState<AnalystOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!ticketId) return;
@@ -211,6 +212,46 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
       if (detail) setEditStatus(detail.status);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deleteTicket() {
+    if (!ticketId || !detail) return;
+    if (
+      !window.confirm(
+        "Excluir este chamado permanentemente? Comentarios e historico serao apagados. Esta acao nao pode ser desfeita."
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/v1/tickets/${ticketId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        showToast({
+          title: "Erro ao excluir",
+          description: j?.error ?? "Nao foi possivel excluir o chamado.",
+          variant: "error",
+        });
+        return;
+      }
+      showToast({
+        title: "Chamado excluido",
+        description: "O registro foi removido.",
+        variant: "success",
+      });
+      onClose();
+      router.refresh();
+    } catch {
+      showToast({
+        title: "Erro ao excluir",
+        description: "Falha de rede.",
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -557,7 +598,15 @@ export function TicketDetailModal({ ticketId, onClose }: Props) {
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-border px-5 py-3 text-right">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3">
+          <button
+            type="button"
+            onClick={() => void deleteTicket()}
+            disabled={deleting || !detail}
+            className="rounded-lg border border-danger/50 bg-danger/10 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? "Excluindo..." : "Excluir chamado"}
+          </button>
           <button
             type="button"
             onClick={onClose}
